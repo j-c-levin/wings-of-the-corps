@@ -10,6 +10,11 @@ export const EXPECTATION_RISE_PER_STANDING = 0.55 // expectation trails standing
 export const EXPECTATION_FLOOR_BY_RUNG = { 1: 0, 2: 12, 3: 30, 4: 50 } as const
 export const FAIL_DAYS_TO_RELIEVED = 30           // sustained standing<expectation ends run
 export const FEED_COST: Record<BreedId, number> = { winchester: 1, greyling: 1, 'grey-copper': 2, 'yellow-reaper': 3, longwing: 3, 'chequered-nettle': 6, kazilik: 6 }
+export const FEED_SHORTFALL_CONTENTMENT = 4       // per-dragon contentment hit on a feed shortfall day
+export const WOUND_HEAL_PER_DAY = 2
+export const HEALING_THRESHOLD = 60               // woundsTemp at/above this benches a dragon as 'healing'
+export const TRAINING_PER_DAY = 0.8               // passive training gain for dragons at home
+export const CONTENTMENT_BASELINE = 50            // daily drift target
 export const WAR_HEAT_PER_DAY = 0.28              // ~360 days to finale
 export const FINALE_HEAT = 100
 // mission maths
