@@ -13,6 +13,7 @@ import {
   EXPECTATION_RISE_PER_STANDING,
   EXPECTATION_FLOOR_BY_RUNG,
   FAIL_DAYS_TO_RELIEVED,
+  WOUNDED_LOG_CHANCE,
 } from './balance'
 import { LOG_LINES } from './content'
 import type { LogContext } from './content'
@@ -121,7 +122,7 @@ function runDailyUpkeep(state: GameState, rng: Rng): void {
 
 function pickDailyLogContext(state: GameState, rng: Rng): LogContext {
   const anyWounded = state.dragons.some((d: Dragon) => d.woundsTemp > 0)
-  if (anyWounded && rng.next() < 0.5) {
+  if (anyWounded && rng.next() < WOUNDED_LOG_CHANCE) {
     return 'wounded'
   }
   if (state.dragons.length > 0) {

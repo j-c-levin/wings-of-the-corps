@@ -15,6 +15,7 @@ export const WOUND_HEAL_PER_DAY = 2
 export const HEALING_THRESHOLD = 60               // woundsTemp at/above this benches a dragon as 'healing'
 export const TRAINING_PER_DAY = 0.8               // passive training gain for dragons at home
 export const CONTENTMENT_BASELINE = 50            // daily drift target
+export const WOUNDED_LOG_CHANCE = 0.5             // daily flavor-log odds of 'wounded' context when any dragon is hurt
 export const WAR_HEAT_PER_DAY = 0.28              // ~360 days to finale
 export const FINALE_HEAT = 100
 // mission maths
