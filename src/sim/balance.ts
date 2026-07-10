@@ -19,3 +19,12 @@ export const READINESS_WEIGHT = 0.05
 export const WEATHER_WEIGHT = 0.10
 export const MIN_SUCCESS = 0.05
 export const MAX_SUCCESS = 0.98
+// starting roster tuning (consumed by newRun)
+export const START_STANDING = 5
+export const OFFICER_START_MORALE = 70
+export const CANDIDATE_SKILL_BEST = 7
+export const CANDIDATE_NERVE_BEST = 7
+export const CANDIDATE_SKILL_RELATIVE = 4
+export const RELATIVE_NERVE_RANGE: readonly [number, number] = [4, 6]
+export const JUNIOR_SKILL_RANGE: readonly [number, number] = [1, 3]
+export const JUNIOR_NERVE_RANGE: readonly [number, number] = [2, 5]

@@ -1,10 +1,19 @@
 import { createRng } from './rng'
-import { SCHEMA_VERSION, START_COIN } from './balance'
+import {
+  SCHEMA_VERSION,
+  START_COIN,
+  START_STANDING,
+  OFFICER_START_MORALE,
+  CANDIDATE_SKILL_BEST,
+  CANDIDATE_NERVE_BEST,
+  CANDIDATE_SKILL_RELATIVE,
+  RELATIVE_NERVE_RANGE,
+  JUNIOR_SKILL_RANGE,
+  JUNIOR_NERVE_RANGE,
+} from './balance'
 import { OFFICER_NAMES, PATRON_DEFS } from './content'
 import type { OfficerNameEntry } from './content'
 import type { GameState, Officer, Patron, Rank, Id } from './types'
-
-const OFFICER_START_MORALE = 70
 
 /** Allocates ids from a single shared monotonic counter, e.g. "o1", "p2", "c3". */
 function makeIdCounter() {
@@ -64,8 +73,8 @@ export function newRun(seed: number): GameState {
     gender: candidateGenders[0],
     rank: 'midwingman',
     xp: 0,
-    skill: 7,
-    nerve: 7,
+    skill: CANDIDATE_SKILL_BEST,
+    nerve: CANDIDATE_NERVE_BEST,
     morale: OFFICER_START_MORALE,
     dragonId: null,
     relatedPatronId: null,
@@ -78,8 +87,8 @@ export function newRun(seed: number): GameState {
     gender: candidateGenders[1],
     rank: 'midwingman',
     xp: 0,
-    skill: 4,
-    nerve: rng.int(4, 6),
+    skill: CANDIDATE_SKILL_RELATIVE,
+    nerve: rng.int(RELATIVE_NERVE_RANGE[0], RELATIVE_NERVE_RANGE[1]),
     morale: OFFICER_START_MORALE,
     dragonId: null,
     relatedPatronId: allendale.id,
@@ -92,8 +101,8 @@ export function newRun(seed: number): GameState {
     gender: candidateGenders[2],
     rank: 'midwingman',
     xp: 0,
-    skill: 4,
-    nerve: rng.int(4, 6),
+    skill: CANDIDATE_SKILL_RELATIVE,
+    nerve: rng.int(RELATIVE_NERVE_RANGE[0], RELATIVE_NERVE_RANGE[1]),
     morale: OFFICER_START_MORALE,
     dragonId: null,
     relatedPatronId: barham.id,
@@ -109,8 +118,8 @@ export function newRun(seed: number): GameState {
       gender,
       rank,
       xp: 0,
-      skill: rng.int(1, 3),
-      nerve: rng.int(2, 5),
+      skill: rng.int(JUNIOR_SKILL_RANGE[0], JUNIOR_SKILL_RANGE[1]),
+      nerve: rng.int(JUNIOR_NERVE_RANGE[0], JUNIOR_NERVE_RANGE[1]),
       morale: OFFICER_START_MORALE,
       dragonId: null,
       relatedPatronId: null,
@@ -139,7 +148,7 @@ export function newRun(seed: number): GameState {
     coin: START_COIN,
     feed: 0,
     treasure: 0,
-    standing: 5,
+    standing: START_STANDING,
     expectation: 0,
     failStreakDays: 0,
     officers,

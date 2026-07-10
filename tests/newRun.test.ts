@@ -66,6 +66,39 @@ describe('newRun', () => {
     }
   })
 
+  it('creates the three candidates with the binding skill/nerve/patron links', () => {
+    const state = newRun(314)
+    const midwingmen = state.officers.filter((o) => o.rank === 'midwingman')
+
+    const best = midwingmen.find((o) => o.relatedPatronId === null)
+    expect(best).toBeDefined()
+    expect(best?.skill).toBe(7)
+    expect(best?.nerve).toBe(7)
+    expect(best?.relatedPatronId).toBeNull()
+
+    const gratitudePatron = state.patrons.find((p) => p.kind === 'gratitude')!
+    const transactionalPatron = state.patrons.find((p) => p.kind === 'transactional')!
+
+    const gratitudeRelative = midwingmen.find((o) => o.relatedPatronId === gratitudePatron.id)
+    expect(gratitudeRelative).toBeDefined()
+    expect(gratitudeRelative?.skill).toBe(4)
+
+    const transactionalRelative = midwingmen.find((o) => o.relatedPatronId === transactionalPatron.id)
+    expect(transactionalRelative).toBeDefined()
+    expect(transactionalRelative?.skill).toBe(4)
+  })
+
+  it('gives every entity a unique id and leaves nextId past the entity count', () => {
+    const state = newRun(2718)
+    const ids = [
+      ...state.officers.map((o) => o.id),
+      ...state.patrons.map((p) => p.id),
+      ...state.pendingCards.map((c) => c.id),
+    ]
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(state.nextId).toBeGreaterThan(ids.length)
+  })
+
   it('sets the expected starting resource/state values', () => {
     const state = newRun(2026)
     expect(state.coin).toBe(60)
