@@ -7,6 +7,7 @@
   import MenuBar from './MenuBar.svelte'
   import PeopleSheet from './PeopleSheet.svelte'
   import ProvisionsSheet from './ProvisionsSheet.svelte'
+  import ResetButton from './ResetButton.svelte'
   import RosterSheet from './RosterSheet.svelte'
   import WingStrip from './WingStrip.svelte'
 
@@ -31,7 +32,10 @@
 <div class="shell">
   <header class="header">
     <div class="row row-day">
-      <span class="day">Day {game.state.day}</span>
+      <div class="day-group">
+        <span class="day">Day {game.state.day}</span>
+        <ResetButton />
+      </div>
       <div class="scrub">
         <button class:active={game.speed === 0} disabled={ended} onclick={() => setSpeed(0 as Speed)}>⏸</button>
         <button class:active={game.speed === 1} disabled={ended} onclick={() => setSpeed(1 as Speed)}>▶</button>
@@ -103,6 +107,12 @@
 
   .row-day {
     margin-bottom: 0.4rem;
+  }
+
+  .day-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .day {
