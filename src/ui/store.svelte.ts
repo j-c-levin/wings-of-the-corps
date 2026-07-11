@@ -2,6 +2,8 @@ import { newRun } from '../sim/newRun'
 import { tick } from '../sim/tick'
 import type { GameState } from '../sim/types'
 import { SCHEMA_VERSION } from '../sim/balance'
+import { auctionSpendGoodwill, chooseCardOption } from '../sim/actions'
+import { auctionClaim } from '../sim/auction'
 
 const SAVE_KEY = 'wings-of-the-corps-save-v1'
 
@@ -117,4 +119,7 @@ export function startLoop(): void {
 
   // e2e hook: lets Playwright assert on raw state.
   ;(window as any).__game = game
+
+  // e2e + Task-12 bridge; auction UI lands next task.
+  ;(window as any).__actions = { auctionSpendGoodwill, auctionClaim, chooseCardOption, act }
 }

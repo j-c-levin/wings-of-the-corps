@@ -4,6 +4,9 @@
   import CardOverlay from './CardOverlay.svelte'
   import CovertTab from './CovertTab.svelte'
   import EndScreen from './EndScreen.svelte'
+  import MissionsTab from './MissionsTab.svelte'
+  import RosterTab from './RosterTab.svelte'
+  import PeopleTab from './PeopleTab.svelte'
 
   onMount(() => {
     startLoop()
@@ -67,11 +70,11 @@
     {:else if game.tab === 'covert'}
       <CovertTab />
     {:else if game.tab === 'missions'}
-      <p class="placeholder dim">Missions — coming in Task 11.</p>
+      <MissionsTab />
     {:else if game.tab === 'roster'}
-      <p class="placeholder dim">Roster — coming in Task 11.</p>
+      <RosterTab />
     {:else}
-      <p class="placeholder dim">People — coming in Task 11.</p>
+      <PeopleTab />
     {/if}
   </main>
 
@@ -177,11 +180,6 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.8rem;
-  }
-
-  .placeholder {
-    text-align: center;
-    margin-top: 2rem;
   }
 
   .auction-placeholder ul {
