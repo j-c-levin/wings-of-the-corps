@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { newRun } from '../src/sim/newRun'
 import { tick } from '../src/sim/tick'
 import { adjustTier, earnGoodwill, spendGoodwill } from '../src/sim/patrons'
+import { resolveMission } from '../src/sim/missions'
+import type { Rng } from '../src/sim/rng'
 import {
   TICKS_PER_DAY,
   TIER_MIN,
@@ -17,6 +19,23 @@ import type { GameState, Mission } from '../src/sim/types'
 
 function tickN(state: GameState, n: number): void {
   for (let i = 0; i < n; i++) tick(state)
+}
+
+/** Same scripted-Rng double as missions.test.ts: next() returns queued values, then 0. */
+function scriptedRng(queue: number[]): Rng {
+  const values = [...queue]
+  const self: Rng = {
+    next: () => (values.length > 0 ? values.shift()! : 0),
+    int(min, max) {
+      return min + Math.floor(self.next() * (max - min + 1))
+    },
+    pick<T>(arr: T[]): T {
+      return arr[Math.floor(self.next() * arr.length)]
+    },
+    getState: () => 0,
+    setState: () => {},
+  }
+  return self
 }
 
 describe('adjustTier', () => {
@@ -175,6 +194,94 @@ describe('tickPatrons — rival traps', () => {
 
     const expectedCoin = Math.round((COIN_REWARD_BASE * m.severityTier + COIN_REWARD_PER_ENEMY * m.enemyStrength) * TRAP_REWARD_MULT)
     expect(m.rewardCoin).toBe(expectedCoin)
+  })
+})
+
+describe('trap flag cleanup on offer expiry', () => {
+  it('an expired trap offer leaves no trap: flag behind', () => {
+    const state = newRun(23)
+    state.pendingCards = []
+    const rival = state.patrons.find((p) => p.kind === 'rival')!
+    const id = `m${state.nextId}`
+    state.nextId += 1
+    state.missions.push({
+      id,
+      name: 'Trap Offer',
+      kind: 'dispatch',
+      severityTier: 1,
+      rewardCoin: 30,
+      rewardTreasure: 0,
+      rewardStanding: 8,
+      patronId: rival.id,
+      offerExpiresDay: 1,
+      deadlineDay: 10,
+      durationTicks: 6,
+      enemyStrength: 7,
+      weather: 0.2,
+      status: 'offered',
+      assignedDragonId: null,
+      returnTick: null,
+      outcome: null,
+    })
+    state.flags[`trap:${id}`] = true
+
+    tickN(state, TICKS_PER_DAY * 3) // well past offerExpiresDay
+
+    expect(state.missions.find((m) => m.id === id)).toBeUndefined()
+    expect(state.flags[`trap:${id}`]).toBeUndefined()
+  })
+})
+
+describe('missions.ts refactor — failure-path patron effects', () => {
+  it('a failed patron mission drops tier by exactly 1 and updates memory', () => {
+    const state = newRun(24)
+    const patron = state.patrons.find((p) => p.kind === 'transactional')!
+    patron.tier = 1
+    const dragonId = `d${state.nextId}`
+    state.nextId += 1
+    state.dragons.push({
+      id: dragonId,
+      name: 'Test Dragon',
+      breed: 'winchester',
+      training: 0,
+      woundsTemp: 0,
+      woundsLasting: 0,
+      contentment: 0,
+      captainId: state.officers[0].id,
+      status: 'mission',
+      missionId: null,
+    })
+    const mission: Mission = {
+      id: `m${state.nextId}`,
+      name: 'Patron Failure',
+      kind: 'dispatch',
+      severityTier: 1,
+      rewardCoin: 10,
+      rewardTreasure: 0,
+      rewardStanding: 3,
+      patronId: patron.id,
+      offerExpiresDay: state.day + 4,
+      deadlineDay: state.day + 10,
+      durationTicks: 6,
+      enemyStrength: 9,
+      weather: 1,
+      status: 'active',
+      assignedDragonId: dragonId,
+      returnTick: state.tickCount + 1,
+      outcome: null,
+    }
+    state.nextId += 1
+    state.missions.push(mission)
+
+    // Draws on a sev1 failure: 1. success roll (0.99 beats any clamped
+    // chance → fail) 2. woundsTemp 3. woundsLasting 4. crewLost
+    // 5. skill-growth (captain alive).
+    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5, 0.99]))
+
+    expect(mission.outcome?.success).toBe(false)
+    expect(patron.tier).toBe(0) // exactly -1 from its prior value of 1
+    expect(patron.memory).toContain(mission.name)
+    expect(patron.memory.toLowerCase()).toContain('failure')
   })
 })
 

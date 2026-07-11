@@ -1,4 +1,5 @@
-import type { BreedId, PatronKind } from './types'
+import type { BreedId, GameState, MissionKind, PatronKind } from './types'
+import type { Rng } from './rng'
 
 export interface BreedMeta {
   name: string
@@ -192,4 +193,20 @@ export const MISSION_NAMES: { dispatch: string[]; combat: string[]; formation: s
     'The Grand Sortie',
     'Last Stand at the Cliffs',
   ],
+}
+
+/**
+ * Picks a mission name from MISSION_NAMES[kind] that doesn't collide with any
+ * mission already in state, suffixing " 2", " 3", ... on a repeat pick.
+ * Lives here (next to the name pool it draws from) so both missions.ts and
+ * patrons.ts can share it without importing each other.
+ */
+export function pickUniqueMissionName(state: GameState, kind: MissionKind, rng: Rng): string {
+  const pool = MISSION_NAMES[kind]
+  const base = rng.pick(pool)
+  const existingNames = new Set(state.missions.map((m) => m.name))
+  if (!existingNames.has(base)) return base
+  let n = 2
+  while (existingNames.has(`${base} ${n}`)) n += 1
+  return `${base} ${n}`
 }

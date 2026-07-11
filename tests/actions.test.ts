@@ -136,6 +136,18 @@ describe('acceptMission', () => {
     expect(dragon.status).toBe('mission')
     expect(dragon.missionId).toBe(mission.id)
   })
+
+  it('clears a trap: flag on acceptance (via departMission)', () => {
+    const state = newRun(7)
+    const dragon = makeDragon(state)
+    const mission = makeMission(state)
+    state.flags[`trap:${mission.id}`] = true
+
+    acceptMission(state, mission.id, dragon.id)
+
+    expect(state.flags[`trap:${mission.id}`]).toBeUndefined()
+    expect(mission.status).toBe('active')
+  })
 })
 
 describe('declineMission', () => {

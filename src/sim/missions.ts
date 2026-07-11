@@ -3,7 +3,7 @@ import type { Rng } from './rng'
 import { successChance } from './projection'
 import { addLog } from './tick'
 import { adjustTier, earnGoodwill } from './patrons'
-import { LOG_LINES, MISSION_NAMES } from './content'
+import { LOG_LINES, pickUniqueMissionName } from './content'
 import {
   TICKS_PER_DAY,
   REFUSAL_WAR_HEAT_GATE,
@@ -77,6 +77,7 @@ export function tickMissions(state: GameState, rng: Rng): void {
     for (const m of state.missions) {
       if (m.status === 'offered' && state.day > m.offerExpiresDay) {
         expiredIds.push(m.id)
+        delete state.flags[`trap:${m.id}`] // expired trap offers must not leak their flag
         if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
           state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
           addLog(state, `The ${m.name} offer lapses unanswered — the Admiralty notices the refusal.`)
@@ -92,13 +93,20 @@ export function tickMissions(state: GameState, rng: Rng): void {
   }
 }
 
-/** Sends a dragon out on an offered mission. No validation — callers (actions) validate. */
+/**
+ * Sends a dragon out on an offered mission. No validation — callers (actions)
+ * validate. Clears any `trap:` flag here (rather than in acceptMission) so
+ * EVERY depart path — player action or future scripted content — drops the
+ * flag the moment the offer stops being an offer; the range-masking only
+ * ever applied to the offered state.
+ */
 export function departMission(state: GameState, m: Mission, d: Dragon): void {
   m.status = 'active'
   m.assignedDragonId = d.id
   m.returnTick = state.tickCount + m.durationTicks
   d.status = 'mission'
   d.missionId = m.id
+  delete state.flags[`trap:${m.id}`]
 }
 
 /**
@@ -154,16 +162,6 @@ function durationDayRange(kind: OfferableKind): [number, number] {
   return [FORMATION_DURATION_MIN_DAYS, FORMATION_DURATION_MAX_DAYS]
 }
 
-function pickUniqueName(state: GameState, rng: Rng, kind: OfferableKind): string {
-  const pool = MISSION_NAMES[kind]
-  const base = rng.pick(pool)
-  const existingNames = new Set(state.missions.map((m) => m.name))
-  if (!existingNames.has(base)) return base
-  let n = 2
-  while (existingNames.has(`${base} ${n}`)) n += 1
-  return `${base} ${n}`
-}
-
 function pickPatronForMission(state: GameState, rng: Rng): Id | null {
   if (rng.next() >= PATRON_MISSION_CHANCE) return null
   const eligible = state.patrons.filter((p) => p.kind !== 'rival' && p.tier >= 0)
@@ -189,7 +187,7 @@ function buildMissionOffer(state: GameState, rng: Rng): Mission {
   const rewardTreasure = severity >= 2 ? TREASURE_REWARD * (severity - 1) : 0
   const rewardStanding = STANDING_REWARD_BASE * severity + (patronId ? PATRON_MISSION_STANDING_BONUS : 0)
 
-  const name = pickUniqueName(state, rng, kind)
+  const name = pickUniqueMissionName(state, kind, rng)
   const id = `m${state.nextId}`
   state.nextId += 1
 

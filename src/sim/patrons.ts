@@ -1,7 +1,7 @@
 import type { GameState, Id, Mission, MissionKind, Patron } from './types'
 import type { Rng } from './rng'
 import { addLog } from './tick'
-import { MISSION_NAMES } from './content'
+import { pickUniqueMissionName } from './content'
 import {
   TICKS_PER_DAY,
   TIER_MIN,
@@ -128,7 +128,7 @@ function injectTrapMission(state: GameState, rng: Rng, patron: Patron): void {
   const rewardTreasure = Math.round((severity >= 2 ? TREASURE_REWARD * (severity - 1) : 0) * TRAP_REWARD_MULT)
   const rewardStanding = Math.round((STANDING_REWARD_BASE * severity + PATRON_MISSION_STANDING_BONUS) * TRAP_REWARD_MULT)
 
-  const name = uniqueMissionName(state, rng, kind)
+  const name = pickUniqueMissionName(state, kind, rng)
   const id = `m${state.nextId}`
   state.nextId += 1
 
@@ -154,15 +154,4 @@ function injectTrapMission(state: GameState, rng: Rng, patron: Patron): void {
   state.missions.push(mission)
   state.flags[`trap:${id}`] = true
   addLog(state, `${patron.name} recommends you for a lucrative commission — the terms seem generous indeed.`)
-}
-
-/** Local twin of missions.ts's uniqueness helper — kept separate to avoid a circular import. */
-function uniqueMissionName(state: GameState, rng: Rng, kind: MissionKind): string {
-  const pool = MISSION_NAMES[kind]
-  const base = rng.pick(pool)
-  const existingNames = new Set(state.missions.map((m) => m.name))
-  if (!existingNames.has(base)) return base
-  let n = 2
-  while (existingNames.has(`${base} ${n}`)) n += 1
-  return `${base} ${n}`
 }
