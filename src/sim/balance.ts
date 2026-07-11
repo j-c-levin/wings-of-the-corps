@@ -117,3 +117,27 @@ export const TRIBUTE_GOODWILL = 2
 export const FEED_PRICE = 2
 export const AUCTION_GOODWILL_COST = 2
 export const AUCTION_BUMP = 3
+
+// auction.ts — bidding state machine
+export const AUCTION_RIVALS = 5
+export const STANDING_INFLUENCE_DIVISOR = 10
+export const RIVAL_INFLUENCE_SPREAD_MIN = -2
+export const RIVAL_INFLUENCE_SPREAD_MAX = 4
+export const AUCTION_TICKS_PER_CLAIM = 5
+export const AUCTION_GRACE_TICKS = 10
+export const FIRST_AUCTION_RIVAL_MARGIN = 2
+export const JITTER_CHANCE = 0.5
+export const JITTER_SIZE = 1
+export const AUCTION_PATRON_HELP_CHANCE = 0.06
+export const AUCTION_PATRON_BUMP = 2
+export const AUCTION_RIVAL_HURT_CHANCE = 0.06
+export const EGG_HATCH_DAYS = 2
+export const FEMALE_CANDIDATE_SKILL_SLACK = 2
+// hatchEgg — new dragon / captain starting stats
+export const TRAINING_START = 20
+export const CONTENTMENT_START = 60
+export const HATCH_MORALE_BONUS = 10
+
+// missions.ts — crew equity conversion (non-captain xp + promotion thresholds)
+export const CREW_XP_PER_MISSION = 2
+export const RANK_XP: Record<'ensign' | 'midwingman' | 'lieutenant', number> = { ensign: 15, midwingman: 40, lieutenant: 90 }

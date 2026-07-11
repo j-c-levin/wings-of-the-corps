@@ -16,6 +16,8 @@ import {
   WOUND_HEAL_PER_DAY,
   AVG_WOUND_ESTIMATE,
   LATE_STANDING_COST,
+  RANK_XP,
+  CREW_XP_PER_MISSION,
 } from '../src/sim/balance'
 import type { Dragon, GameState, Mission } from '../src/sim/types'
 
@@ -429,6 +431,83 @@ describe('generateOffers', () => {
     }
     expect(state.missions.length).toBeGreaterThan(0)
     expect(state.missions.every((m) => m.kind !== 'war')).toBe(true)
+  })
+
+  it('resumes offers while an egg is incubating (a concluded auction)', () => {
+    const state = newRun(6)
+    state.pendingCards = []
+    state.day = OFFER_INTERVAL_DAYS
+    state.auction = {
+      eggs: [{ breed: 'winchester', claimedBy: 'You' }],
+      bidders: [{ name: 'You', influence: 5, you: true }],
+      ticksRemaining: 6,
+      ticksPerClaim: 5,
+      nextClaimIn: 0,
+      concluded: true, // incubating, not being bid on
+      wonBreed: 'winchester',
+      candidateOfficerId: state.officers[0].id,
+    }
+    generateOffers(state, createRng(1))
+    expect(state.missions.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('resolveMission — crew equity conversion', () => {
+  it('awards crew xp to non-captains on success and promotes across a rank threshold', () => {
+    const state = newRun(21)
+    const runner = state.officers.find((o) => o.rank === 'runner')!
+    runner.xp = RANK_XP.ensign - CREW_XP_PER_MISSION // one sev-1 success shy of ensign
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([0.0, 0.5, 0.99])) // success
+    expect(mission.outcome?.success).toBe(true)
+    expect(runner.xp).toBe(RANK_XP.ensign)
+    expect(runner.rank).toBe('ensign')
+  })
+
+  it('never promotes an officer to captain via xp', () => {
+    const state = newRun(22)
+    const lt = state.officers[1]
+    Object.assign(lt, { rank: 'lieutenant', xp: 100000 })
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([0.0, 0.5, 0.99]))
+    expect(lt.rank).toBe('lieutenant')
+  })
+
+  it('grants no crew xp on a failure', () => {
+    const state = newRun(23)
+    const runner = state.officers.find((o) => o.rank === 'runner')!
+    const xpBefore = runner.xp
+    const dragon = makeDragon(state, { training: 0, contentment: 0 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 9,
+      weather: 1,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([0.99])) // failure
+    expect(mission.outcome?.success).toBe(false)
+    expect(runner.xp).toBe(xpBefore)
   })
 })
 

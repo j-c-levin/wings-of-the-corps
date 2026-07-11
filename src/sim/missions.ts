@@ -3,7 +3,7 @@ import type { Rng } from './rng'
 import { successChance } from './projection'
 import { addLog } from './tick'
 import { adjustTier, earnGoodwill } from './patrons'
-import { LOG_LINES, pickUniqueMissionName } from './content'
+import { LOG_LINES, pickUniqueMissionName, nextRank } from './content'
 import {
   TICKS_PER_DAY,
   REFUSAL_WAR_HEAT_GATE,
@@ -51,6 +51,8 @@ import {
   SKILL_GROWTH_CHANCE,
   SKILL_MAX,
   DONE_MISSION_CAP,
+  CREW_XP_PER_MISSION,
+  RANK_XP,
 } from './balance'
 
 type OfferableKind = Exclude<MissionKind, 'war'>
@@ -115,7 +117,9 @@ export function departMission(state: GameState, m: Mission, d: Dragon): void {
  * determinism gate — so nothing new can appear mid-scripted-sequence.
  */
 export function generateOffers(state: GameState, rng: Rng): void {
-  if (state.pendingCards.length > 0 || state.auction !== null) return
+  // Offers pause during scripted card sequences and while an auction is being
+  // BID on, but may resume once an egg is merely incubating (concluded auction).
+  if (state.pendingCards.length > 0 || (state.auction !== null && !state.auction.concluded)) return
   if (state.day % OFFER_INTERVAL_DAYS !== 0) return
 
   const dayFlag = `offers-day-${state.day}`
@@ -267,6 +271,13 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     }
 
     narrativeParts.push(`${m.name} succeeds.`)
+
+    // Equity conversion: a success lifts the whole covert, not just the flyer.
+    // Every living non-captain officer banks a little xp and may promote one
+    // rank (max one per mission) — this is what carries a runner up to the
+    // midwingman/lieutenant ranks the rung-2/3 auctions gate on. Captaincy is
+    // never reached this way; it comes only from bonding a dragon at hatch.
+    awardCrewEquity(state, sev)
   } else {
     d.woundsTemp = Math.min(100, d.woundsTemp + rng.int(FAIL_WOUND_MIN, FAIL_WOUND_MAX))
     d.woundsLasting = Math.min(30, d.woundsLasting + rng.int(0, FAIL_LASTING_MAX))
@@ -340,6 +351,29 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
   }
 
   pruneDoneMissions(state)
+}
+
+/**
+ * On a mission success, awards crew xp to every living non-captain officer and
+ * promotes any who cross the next rank's RANK_XP threshold (one rank per
+ * mission). Officers never reach 'captain' here — nextRank('lieutenant') is
+ * 'captain', which has no RANK_XP entry, so the gate is impossible to pass.
+ */
+function awardCrewEquity(state: GameState, sev: 1 | 2 | 3): void {
+  for (const o of state.officers) {
+    if (!o.alive || o.rank === 'captain') continue
+    o.xp += CREW_XP_PER_MISSION * sev
+  }
+  for (const o of state.officers) {
+    if (!o.alive || o.rank === 'captain') continue
+    const target = nextRank(o.rank)
+    if (!target) continue
+    const threshold = (RANK_XP as Record<string, number>)[target]
+    if (threshold !== undefined && o.xp >= threshold) {
+      o.rank = target
+      addLog(state, `${o.name} is promoted to ${target}.`)
+    }
+  }
 }
 
 /** Keeps at most DONE_MISSION_CAP done missions, dropping the oldest by returnTick. */

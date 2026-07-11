@@ -1,5 +1,22 @@
-import type { BreedId, GameState, MissionKind, PatronKind } from './types'
+import type { BreedId, GameState, MissionKind, PatronKind, Rank } from './types'
 import type { Rng } from './rng'
+
+/** Rank precedence, low → high. Shared by the auction (candidate gating) and
+ * the crew-promotion ladder in missions. */
+export const RANK_SEQUENCE: Rank[] = ['runner', 'ensign', 'midwingman', 'lieutenant', 'captain']
+export const RANK_ORDER: Record<Rank, number> = {
+  runner: 0,
+  ensign: 1,
+  midwingman: 2,
+  lieutenant: 3,
+  captain: 4,
+}
+
+/** The rank one step above `r`, or null if `r` is already the top rank. */
+export function nextRank(r: Rank): Rank | null {
+  const i = RANK_SEQUENCE.indexOf(r)
+  return i >= 0 && i < RANK_SEQUENCE.length - 1 ? RANK_SEQUENCE[i + 1] : null
+}
 
 export interface BreedMeta {
   name: string
