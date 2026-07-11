@@ -18,6 +18,7 @@ import {
   LATE_STANDING_COST,
   RANK_XP,
   CREW_XP_PER_MISSION,
+  REFUSAL_WAR_HEAT_GATE,
 } from '../src/sim/balance'
 import type { Dragon, GameState, Mission } from '../src/sim/types'
 
@@ -553,7 +554,7 @@ describe('tickMissions', () => {
   it('expires offers past offerExpiresDay and costs standing once warHeat exceeds the gate', () => {
     const state = newRun(14)
     state.pendingCards = []
-    state.warHeat = 60
+    state.warHeat = REFUSAL_WAR_HEAT_GATE + 10
     const mission = makeMission(state, { offerExpiresDay: 1 })
     const standingBefore = state.standing
 

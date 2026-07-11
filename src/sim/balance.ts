@@ -16,7 +16,7 @@ export const HEALING_THRESHOLD = 60               // woundsTemp at/above this be
 export const TRAINING_PER_DAY = 0.8               // passive training gain for dragons at home
 export const CONTENTMENT_BASELINE = 50            // daily drift target
 export const WOUNDED_LOG_CHANCE = 0.5             // daily flavor-log odds of 'wounded' context when any dragon is hurt
-export const WAR_HEAT_PER_DAY = 0.28              // ~300 days to finale once WAR_HEAT_NOISE is folded in
+export const WAR_HEAT_PER_DAY = 0.25              // + WAR_HEAT_NOISE mean 0.05 = ~0.30/day → finale centred ~day 333 (mid of the 300-380 window)
 export const FINALE_HEAT = 100
 // mission maths
 export const BASE_SUCCESS = 0.95
@@ -48,7 +48,7 @@ export const RISK_DANGEROUS = 0.4
 export const AVG_WOUND_ESTIMATE = 20
 
 // missions.ts — offer generation
-export const REFUSAL_WAR_HEAT_GATE = 50
+export const REFUSAL_WAR_HEAT_GATE = 80
 export const REFUSAL_STANDING_COST = 2
 export const OFFER_INTERVAL_DAYS = 3
 export const MAX_OPEN_OFFERS = 3
@@ -164,6 +164,7 @@ export const WAR_LOG_CHANCE = 0.15           // daily odds of an extra war-flavo
 export const FINALE_LENGTH_DAYS = 20
 export const FINALE_MISSION_INTERVAL_DAYS = 3
 export const FINALE_MISSION_COUNT = 6        // authored war-mission sequence across the finale window
+export const FINALE_SEVERITY_PATTERN: ReadonlyArray<2 | 3> = [2, 2, 3, 3, 3, 3] // per-mission severity, indexed by (i-1); last value is the fallback
 export const WAR_ENEMY_MIN = 6
 export const WAR_ENEMY_MAX = 10
 export const WAR_MISSION_DURATION_MIN_DAYS = 3

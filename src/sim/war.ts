@@ -15,6 +15,7 @@ import {
   FINALE_LENGTH_DAYS,
   FINALE_MISSION_INTERVAL_DAYS,
   FINALE_MISSION_COUNT,
+  FINALE_SEVERITY_PATTERN,
   WAR_ENEMY_MIN,
   WAR_ENEMY_MAX,
   WAR_MISSION_DURATION_MIN_DAYS,
@@ -138,7 +139,7 @@ function tickFinaleMissions(state: GameState, rng: Rng): void {
     if (state.pendingCards.length > 0) return
 
     state.flags[flag] = true
-    const severity: 2 | 3 = i <= 2 ? 2 : 3
+    const severity: 2 | 3 = FINALE_SEVERITY_PATTERN[i - 1] ?? FINALE_SEVERITY_PATTERN[FINALE_SEVERITY_PATTERN.length - 1]
     buildWarMission(state, rng, severity)
     return
   }

@@ -21,7 +21,7 @@ import {
   SCORE_PER_PATRON_TIER,
   TREASURE_KAZILIK_CONSOLATION,
 } from '../src/sim/balance'
-import type { Dragon, GameState, Mission } from '../src/sim/types'
+import type { Dragon, GameState } from '../src/sim/types'
 
 function makeDragon(state: GameState, overrides: Partial<Dragon> = {}): Dragon {
   const id = `d${state.nextId}`
