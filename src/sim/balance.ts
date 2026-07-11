@@ -133,6 +133,7 @@ export const AUCTION_PATRON_BUMP = 2
 export const AUCTION_RIVAL_HURT_CHANCE = 0.06
 export const EGG_HATCH_DAYS = 2
 export const FEMALE_CANDIDATE_SKILL_SLACK = 2
+export const AUCTION_RETRY_COOLDOWN_DAYS = 20  // days before a lost rung-2/3 auction is re-offered
 // hatchEgg — new dragon / captain starting stats
 export const TRAINING_START = 20
 export const CONTENTMENT_START = 60

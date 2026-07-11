@@ -21,6 +21,7 @@ import {
   AUCTION_RIVAL_HURT_CHANCE,
   EGG_HATCH_DAYS,
   FEMALE_CANDIDATE_SKILL_SLACK,
+  AUCTION_RETRY_COOLDOWN_DAYS,
   TRAINING_START,
   CONTENTMENT_START,
   HATCH_MORALE_BONUS,
@@ -41,6 +42,15 @@ import {
  * that a normal auction rolls (they exist only to add variance, which would
  * otherwise defeat a hard tutorial promise). This is a deliberate
  * dispatch-override decision.
+ *
+ * The FTUE also cannot be LOST (design ruling): in scripted mode the final
+ * winchester is never claimed by a rival, and the auction never expires.
+ * Once only the winchester remains, surplus rivals withdraw one per claim
+ * boundary until a single holdout is left, still pinned one margin above
+ * you. The auction then waits — forever, if need be — for the one goodwill
+ * spend that flips you past the holdout, and the claim at the open boundary.
+ * Because that holdout never leaves, auctionClaim's "no rivals left" clause
+ * can never grant a free claim in scripted mode.
  */
 
 /** The scripted first-auction clutch: one middle, one light, one courier last. */
@@ -150,11 +160,26 @@ function applyPatronInterventions(state: GameState, rng: Rng, auction: Auction):
   }
 }
 
-/** Concludes an auction you lost outright: every egg gone, no egg phase. */
+/**
+ * Concludes an auction you lost outright: every egg gone, no egg phase.
+ * A lost rung-2/3 auction is not lost forever: its `auction-N-held` flag is
+ * lifted and a `auction-N-retry-day-<D>` cooldown marker is set, letting the
+ * scheduler re-offer the clutch after AUCTION_RETRY_COOLDOWN_DAYS. Which N
+ * this auction was is inferred from the rung, which only advances on a hatch:
+ * a rung-2 auction only ever runs at rung 1, a rung-3 auction at rung 2.
+ * (The scripted first auction can never reach here — see maybeConclude.)
+ */
 function concludeEmpty(state: GameState, auction: Auction): void {
   auction.concluded = true
   auction.wonBreed = null
   addLog(state, 'The clutch is gone — every egg claimed by another covert. Your candidate returns empty-handed.')
+
+  const n = state.rung === 1 ? 2 : state.rung === 2 ? 3 : null
+  if (n !== null && state.flags[`auction-${n}-held`]) {
+    delete state.flags[`auction-${n}-held`]
+    state.flags[`auction-${n}-retry-day-${state.day + AUCTION_RETRY_COOLDOWN_DAYS}`] = true
+  }
+
   clearAuctionFlags(state)
   state.auction = null
 }
@@ -162,9 +187,10 @@ function concludeEmpty(state: GameState, auction: Auction): void {
 /**
  * After a live tick, decide whether the auction ends. It ends only when the
  * player can no longer claim: either every egg is gone (rivals took them all),
- * or the grace clock expired while you were still being outbid. While unclaimed
- * eggs remain and you are top-at-a-boundary or the sole bidder, we wait
- * (indefinitely — ticksRemaining stops mattering once the rivals are gone).
+ * or the grace clock expired while you were being outbid. While unclaimed
+ * eggs remain and you are top (at a boundary or otherwise) or the sole
+ * bidder, we wait — ticksRemaining stops mattering once you lead the field.
+ * Scripted auctions never conclude empty at all: the FTUE cannot be lost.
  */
 function maybeConclude(state: GameState, auction: Auction): void {
   const unclaimed = auction.eggs.filter((e) => e.claimedBy === null)
@@ -172,7 +198,8 @@ function maybeConclude(state: GameState, auction: Auction): void {
   const youTop = auction.bidders.length > 0 && auction.bidders[0].you
   const playerCanClaim = unclaimed.length > 0 && ((youTop && auction.nextClaimIn <= 0) || !rivalsLeft)
   if (playerCanClaim) return
-  if (unclaimed.length === 0 || auction.ticksRemaining <= 0) {
+  if (state.flags['first-auction'] === true) return
+  if (unclaimed.length === 0 || (auction.ticksRemaining <= 0 && !youTop)) {
     concludeEmpty(state, auction)
   }
 }
@@ -197,13 +224,31 @@ function tickLive(state: GameState, rng: Rng, auction: Auction): void {
   if (auction.nextClaimIn <= 0) {
     const top = auction.bidders[0]
     if (top && !top.you) {
-      const egg = auction.eggs.find((e) => e.claimedBy === null)
-      if (egg) {
-        egg.claimedBy = top.name
-        addLog(state, `${top.name} secures the ${BREEDS[egg.breed].name} egg; your candidate is passed over.`)
+      const unclaimed = auction.eggs.filter((e) => e.claimedBy === null)
+      if (scripted && unclaimed.length <= 1) {
+        // FTUE: the final egg is never taken by a rival. Surplus rivals drift
+        // away one per boundary; the LAST rival stays as a permanent holdout
+        // (pinned one margin above you), so the auction can neither be lost
+        // nor won via the "no rivals left" free-claim clause — only a
+        // goodwill spend gets past him.
+        const rivalCount = auction.bidders.filter((b) => !b.you).length
+        if (rivalCount > 1) {
+          auction.bidders = auction.bidders.filter((b) => b !== top)
+          addLog(state, `${top.name} loses interest in the runt of the clutch and withdraws.`)
+          auction.nextClaimIn = auction.ticksPerClaim
+        } else {
+          // The holdout waits; the boundary stays open for your claim.
+          auction.nextClaimIn = 0
+        }
+      } else {
+        const egg = unclaimed[0]
+        if (egg) {
+          egg.claimedBy = top.name
+          addLog(state, `${top.name} secures the ${BREEDS[egg.breed].name} egg; your candidate is passed over.`)
+        }
+        auction.bidders = auction.bidders.filter((b) => b !== top)
+        auction.nextClaimIn = auction.ticksPerClaim
       }
-      auction.bidders = auction.bidders.filter((b) => b !== top)
-      auction.nextClaimIn = auction.ticksPerClaim
     } else {
       // Top bidder is you: hold at the boundary and wait for auctionClaim.
       auction.nextClaimIn = 0
@@ -243,6 +288,23 @@ function bestCandidate(candidates: Officer[]): Officer | null {
 }
 
 /**
+ * Retry-cooldown gate for the rung-N auction. A lost auction leaves an
+ * `auction-N-retry-day-<D>` marker (flags are boolean-only, so the day lives
+ * in the key). Before day D the auction is blocked; from day D onward the
+ * marker is consumed and the auction may fire again, all other eligibility
+ * rules still applying.
+ */
+function retryBlocked(state: GameState, n: 2 | 3): boolean {
+  const prefix = `auction-${n}-retry-day-`
+  const key = Object.keys(state.flags).find((k) => k.startsWith(prefix))
+  if (!key) return false
+  const retryDay = Number(key.slice(prefix.length))
+  if (state.day < retryDay) return true
+  delete state.flags[key]
+  return false
+}
+
+/**
  * Day-boundary auction scheduler. Runs only when nothing else is pending: no
  * live auction, no decision cards, the run still going. Fires at most one
  * auction per call, first-auction first, then rung-2, then rung-3.
@@ -272,7 +334,8 @@ function maybeScheduleAuction(state: GameState, rng: Rng): void {
     state.rung === 1 &&
     state.dragons.length >= 1 &&
     state.standing >= RUNG_STANDING[2] &&
-    !state.flags['auction-2-held']
+    !state.flags['auction-2-held'] &&
+    !retryBlocked(state, 2)
   ) {
     const candidate = bestCandidate(eligibleCandidates(state, RUNG_RANK_GATE[2] as 'midwingman'))
     if (candidate) {
@@ -294,7 +357,7 @@ function maybeScheduleAuction(state: GameState, rng: Rng): void {
   // FEMALE_CANDIDATE_SKILL_SLACK skill of him — and then SHE becomes the
   // candidate; otherwise the longwing is omitted and the man stands with just
   // the nettle.
-  if (state.rung === 2 && state.standing >= RUNG_STANDING[3] && !state.flags['auction-3-held']) {
+  if (state.rung === 2 && state.standing >= RUNG_STANDING[3] && !state.flags['auction-3-held'] && !retryBlocked(state, 3)) {
     const eligible = eligibleCandidates(state, RUNG_RANK_GATE[3] as 'lieutenant')
     const top = bestCandidate(eligible)
     if (top) {

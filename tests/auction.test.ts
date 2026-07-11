@@ -8,6 +8,7 @@ import { RANK_ORDER } from '../src/sim/content'
 import {
   AUCTION_GOODWILL_COST,
   AUCTION_RIVALS,
+  AUCTION_RETRY_COOLDOWN_DAYS,
   EGG_HATCH_DAYS,
   TICKS_PER_DAY,
   TRAINING_START,
@@ -28,26 +29,31 @@ function startScriptedFirst(state: GameState, candidateId: Id): void {
 describe('first-auction FTUE guarantee', () => {
   const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-  it('you win NOTHING when you never spend goodwill (10 seeds)', () => {
+  it('without a goodwill spend you never win, never lose: the winchester waits behind one holdout (10 seeds)', () => {
     for (const seed of SEEDS) {
       const state = newRun(seed)
       state.pendingCards = []
       startScriptedFirst(state, state.officers[0].id)
 
-      let guard = 0
-      while (state.auction && !state.auction.concluded && guard < 200) {
+      for (let i = 0; i < 200; i++) {
         tick(state)
-        guard += 1
         // The whole point: without a goodwill spend you are never the top bidder.
-        if (state.auction && !state.auction.concluded) {
-          expect(state.auction.bidders[0]?.you).not.toBe(true)
-        }
+        expect(state.auction).not.toBeNull()
+        expect(state.auction!.concluded).toBe(false)
+        expect(state.auction!.bidders[0]?.you).not.toBe(true)
       }
 
-      // The auction dissolves with no egg won: no dragon, no hatching card.
-      expect(state.auction).toBeNull()
+      // The auction is still live: the winchester unclaimed, exactly one
+      // rival holding out above you, no egg won and none lost for good.
+      const a = state.auction!
+      const unclaimed = a.eggs.filter((e) => e.claimedBy === null)
+      expect(unclaimed).toHaveLength(1)
+      expect(unclaimed[0].breed).toBe('winchester')
+      expect(a.bidders.filter((b) => !b.you)).toHaveLength(1)
       expect(state.dragons).toHaveLength(0)
       expect(state.pendingCards.some((c) => c.templateId === 'hatching')).toBe(false)
+      // ... and even now, the holdout blocks a free claim.
+      expect(() => auctionClaim(state, 'winchester')).toThrow()
     }
   })
 
@@ -298,6 +304,89 @@ describe('scheduling', () => {
     expect(a.eggs.map((e) => e.breed)).toContain('longwing')
     // The female within slack becomes the auction candidate.
     expect(a.candidateOfficerId).toBe(state.officers[1].id)
+  })
+
+  it('re-fires a lost rung-2 auction only after the retry cooldown', () => {
+    const state = newRun(11)
+    state.pendingCards = []
+    state.tickCount = TICKS_PER_DAY // a day boundary
+    state.day = 1
+    hatchEgg(state, createRng(5), 'winchester', state.officers[3].id)
+    state.rung = 1
+    state.standing = RUNG_STANDING[2] + 5
+
+    tickAuction(state, createRng(1))
+    expect(state.auction).not.toBeNull()
+
+    // Sink your candidate so every egg goes to a rival and the auction is lost.
+    state.auction!.bidders.find((b) => b.you)!.influence = 0
+    let guard = 0
+    while (state.auction && guard < 100) {
+      tick(state)
+      guard += 1
+    }
+    expect(state.auction).toBeNull()
+    expect(state.dragons).toHaveLength(1) // no new egg won
+
+    // The held flag is lifted and replaced by a retry-day marker.
+    expect(state.flags['auction-2-held']).toBeUndefined()
+    const retryKey = Object.keys(state.flags).find((k) => k.startsWith('auction-2-retry-day-'))!
+    expect(retryKey).toBeDefined()
+    const retryDay = Number(retryKey.slice('auction-2-retry-day-'.length))
+    expect(retryDay).toBe(state.day + AUCTION_RETRY_COOLDOWN_DAYS)
+
+    // The day before the cooldown ends: still blocked.
+    state.tickCount = (retryDay - 1) * TICKS_PER_DAY
+    state.day = retryDay - 1
+    tickAuction(state, createRng(2))
+    expect(state.auction).toBeNull()
+    expect(state.flags[retryKey]).toBe(true)
+
+    // On the cooldown day: the auction fires again and consumes the marker.
+    state.tickCount = retryDay * TICKS_PER_DAY
+    state.day = retryDay
+    tickAuction(state, createRng(2))
+    expect(state.auction).not.toBeNull()
+    expect(state.flags[retryKey]).toBeUndefined()
+    expect(state.flags['auction-2-held']).toBe(true)
+  })
+
+  it('a rung-2 auction is winnable on merit — top at a boundary with no goodwill spend (seeded)', () => {
+    // Seed 29 verified by sweep: with top standing and a skill-10 candidate,
+    // rival jitter lets you lead at a claim boundary without spending goodwill.
+    const state = newRun(29)
+    state.pendingCards = []
+    state.tickCount = TICKS_PER_DAY
+    state.day = 1
+    hatchEgg(state, createRng(5), 'winchester', state.officers[3].id)
+    state.rung = 1
+    state.standing = 100
+    state.officers[0].skill = 10
+    const r = createRng(state.rngState)
+    tickAuction(state, r)
+    state.rngState = r.getState()
+    expect(state.auction).not.toBeNull()
+    const goodwillBefore = state.patrons.map((p) => p.goodwill)
+
+    let won = false
+    let guard = 0
+    while (state.auction && !state.auction.concluded && guard < 60) {
+      tick(state)
+      guard += 1
+      const a = state.auction
+      if (a && !a.concluded && a.bidders[0]?.you && a.nextClaimIn <= 0) {
+        const egg = a.eggs.find((e) => e.claimedBy === null)!
+        auctionClaim(state, egg.breed)
+        won = true
+        break
+      }
+    }
+
+    expect(won).toBe(true)
+    expect(state.auction?.concluded).toBe(true)
+    expect(state.auction?.wonBreed).not.toBeNull()
+    // No goodwill was spent anywhere along the way.
+    expect(state.patrons.map((p) => p.goodwill)).toEqual(goodwillBefore)
   })
 
   it('omits the longwing when the top candidate is male and no female is within slack', () => {
