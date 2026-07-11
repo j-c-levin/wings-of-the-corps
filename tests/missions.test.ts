@@ -443,7 +443,7 @@ describe('resolveMission — aftermath surfacing (final review item 1)', () => {
     chooseCardOption(state, card.id, 0)
 
     expect(state.pendingCards.some((c) => c.id === card.id)).toBe(false)
-    expect(state.log[state.log.length - 1].text).toBe('Test Mission — returned — So noted..')
+    expect(state.log[state.log.length - 1].text).toBe('Test Mission — returned — So noted.')
     // Nothing else on state changed besides the pending-card removal and the
     // card-choice log line — the option itself is a pure no-op.
     const after = JSON.parse(JSON.stringify(state))
@@ -758,6 +758,17 @@ describe('feed log completeness', () => {
     expect(state.log.some((l) => l.text.includes('Baited Errand'))).toBe(true)
   })
 
+  it('logs an offer expiry below the war-heat gate', () => {
+    const state = newRun(1)
+    state.warHeat = 0
+    state.pendingCards = []
+    state.auction = null
+    const mission = makeMission(state, { name: 'Forgotten Errand', offerExpiresDay: state.day - 1 })
+    for (let i = 0; i < TICKS_PER_DAY; i++) tick(state)
+    expect(state.missions.some((m) => m.id === mission.id)).toBe(false)
+    expect(state.log.some((l) => l.text.includes('Forgotten Errand') && l.text.includes('lapses'))).toBe(true)
+  })
+
   it('logs the chosen option when a decision card is answered', () => {
     const state = newRun(1)
     while (state.pendingCards.length === 0 && state.tickCount < 200 * TICKS_PER_DAY) {
@@ -769,7 +780,7 @@ describe('feed log completeness', () => {
     const options = template.options(state, card.params)
     const idx = options.findIndex((o) => o.enabled)
     expect(idx).toBeGreaterThanOrEqual(0)
-    const label = options[idx].label
+    const label = options[idx].label.replace(/\.$/, '')
     const before = state.log.length
     chooseCardOption(state, card.id, idx)
     expect(state.log.slice(before).some((l) => l.text.includes(label))).toBe(true)

@@ -100,6 +100,8 @@ export function tickMissions(state: GameState, rng: Rng): void {
         if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
           state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
           addLog(state, `The ${m.name} offer lapses unanswered — the Admiralty notices the refusal.`)
+        } else {
+          addLog(state, `The ${m.name} offer lapses unanswered.`)
         }
       }
     }

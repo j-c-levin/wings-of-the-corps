@@ -128,7 +128,7 @@ export function chooseCardOption(state: GameState, cardId: Id, optionIndex: numb
   if (!option) throw new Error(`chooseCardOption: invalid option index ${optionIndex}`)
   if (!option.enabled) throw new Error(`chooseCardOption: option ${optionIndex} is disabled`)
 
-  addLog(state, `${template.title(state, card.params)} — ${option.label}.`)
+  addLog(state, `${template.title(state, card.params)} — ${option.label.replace(/\.$/, '')}.`)
 
   // Same reconstruct/writeback dance tick.ts does — chooseCardOption is the
   // one player action that needs the RNG.
