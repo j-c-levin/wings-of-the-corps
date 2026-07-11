@@ -8,7 +8,6 @@ import { auctionClaim } from '../sim/auction'
 const SAVE_KEY = 'wings-of-the-corps-save-v1'
 
 export type Speed = 0 | 1 | 4 | 16
-export type Tab = 'covert' | 'missions' | 'roster' | 'people'
 export type SheetId = 'roster' | 'people' | 'provisions'
 
 function params(): URLSearchParams {
@@ -44,7 +43,6 @@ function load(): GameState | null {
 export const game = $state<{
   state: GameState
   speed: Speed
-  tab: Tab
   sheet: SheetId | null
   focusDragonId: string | null
 }>({
@@ -53,7 +51,6 @@ export const game = $state<{
   // falling back to a fresh random-seeded run if there isn't one.
   state: seedFromQuery !== null ? newRun(seedFromQuery) : (load() ?? newRun(Date.now() % 0xffffffff)),
   speed: 0,
-  tab: 'covert',
   sheet: null,
   focusDragonId: null,
 })
@@ -87,7 +84,6 @@ export function restart(): void {
   // Same seed-sharing precedence as the initial load: a URL seed wins.
   game.state = newRun(seedFromQuery ?? Date.now() % 0xffffffff)
   game.speed = 0
-  game.tab = 'covert'
   game.sheet = null
   game.focusDragonId = null
   saveNow()

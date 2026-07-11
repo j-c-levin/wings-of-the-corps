@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { game, setSpeed, startLoop, type Speed } from './store.svelte'
+  import { game, setSpeed, openSheet, startLoop, type Speed } from './store.svelte'
   import AuctionScene from './AuctionScene.svelte'
-  import CardOverlay from './CardOverlay.svelte'
-  import CovertTab from './CovertTab.svelte'
   import EndScreen from './EndScreen.svelte'
-  import MissionsTab from './MissionsTab.svelte'
-  import RosterTab from './RosterTab.svelte'
-  import PeopleTab from './PeopleTab.svelte'
+  import Feed from './Feed.svelte'
+  import MenuBar from './MenuBar.svelte'
+  import PeopleSheet from './PeopleSheet.svelte'
+  import ProvisionsSheet from './ProvisionsSheet.svelte'
+  import RosterSheet from './RosterSheet.svelte'
+  import WingStrip from './WingStrip.svelte'
 
   onMount(() => {
     startLoop()
@@ -15,7 +16,6 @@
 
   const ended = $derived(game.state.status === 'ended')
   const auctionLive = $derived(game.state.auction !== null && !game.state.auction.concluded)
-  const missionsBadge = $derived(game.state.missions.some((m) => m.status === 'offered'))
 
   // "Fuzzy red line": a soft gradient band centred on expectation, never a
   // hard tick — the player should feel the danger zone, not read a number.
@@ -26,10 +26,6 @@
     const inner = Math.min(100, center + ZONE_HALF_WIDTH)
     return `linear-gradient(to right, transparent 0%, transparent ${outer}%, var(--danger-soft) ${center}%, transparent ${inner}%, transparent 100%)`
   })
-
-  function tabClick(tab: typeof game.tab): void {
-    game.tab = tab
-  }
 </script>
 
 <div class="shell">
@@ -44,11 +40,11 @@
       </div>
     </div>
     <div class="row row-resources">
-      <div class="resources">
+      <button type="button" class="resources" onclick={() => openSheet('provisions')}>
         <span>🪙 {game.state.coin}</span>
         <span>🥩 {game.state.feed}</span>
         <span>💰 {game.state.treasure}</span>
-      </div>
+      </button>
     </div>
     <div class="standing-wrap">
       <div class="standing-track" style="background: {zoneStops}">
@@ -61,27 +57,9 @@
   {#if auctionLive}
     <AuctionScene />
   {:else}
-    <main class="main">
-      {#if game.tab === 'covert'}
-        <CovertTab />
-      {:else if game.tab === 'missions'}
-        <MissionsTab />
-      {:else if game.tab === 'roster'}
-        <RosterTab />
-      {:else}
-        <PeopleTab />
-      {/if}
-    </main>
-
-    <footer class="tabs">
-      <button class:active={game.tab === 'covert'} onclick={() => tabClick('covert')}>Covert</button>
-      <button class:active={game.tab === 'missions'} onclick={() => tabClick('missions')}>
-        Missions
-        {#if missionsBadge}<span class="badge"></span>{/if}
-      </button>
-      <button class:active={game.tab === 'roster'} onclick={() => tabClick('roster')}>Roster</button>
-      <button class:active={game.tab === 'people'} onclick={() => tabClick('people')}>People</button>
-    </footer>
+    <WingStrip />
+    <Feed />
+    <MenuBar />
   {/if}
 </div>
 
@@ -89,8 +67,12 @@
   <EndScreen />
 {/if}
 
-{#if game.state.pendingCards.length > 0}
-  <CardOverlay />
+{#if game.sheet === 'roster'}
+  <RosterSheet />
+{:else if game.sheet === 'people'}
+  <PeopleSheet />
+{:else if game.sheet === 'provisions'}
+  <ProvisionsSheet />
 {/if}
 
 <style>
@@ -146,6 +128,13 @@
     display: flex;
     gap: 0.9rem;
     font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    min-height: 0;
+    padding: 0;
+    font-size: 1rem;
+    text-align: left;
   }
 
   .standing-wrap {
@@ -170,41 +159,5 @@
   .standing-label {
     font-size: 0.75rem;
     margin-top: 0.2rem;
-  }
-
-  .main {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.8rem;
-  }
-
-  .tabs {
-    display: flex;
-    flex-shrink: 0;
-    border-top: 1px solid var(--line);
-    background: var(--bg-raised);
-  }
-
-  .tabs button {
-    flex: 1;
-    border: none;
-    border-radius: 0;
-    min-height: 52px;
-    position: relative;
-    background: transparent;
-  }
-
-  .tabs button.active {
-    color: var(--accent);
-  }
-
-  .badge {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--danger);
-    margin-left: 0.3rem;
-    vertical-align: middle;
   }
 </style>
