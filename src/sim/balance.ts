@@ -187,7 +187,7 @@ export const KAZILIK_COST = 120
 // sell the egg on" outcomes.
 export const TREASURE_EGG_CONSOLATION = 5
 
-// MissionsTab.svelte — trap display mask (item 4 of the final review). The
+// OfferCard.svelte — trap display mask (item 4 of the final review). The
 // spread is asymmetric on purpose: a trap always under-reports how bad the
 // enemy strength could be, so the displayed range and the pessimistic-picker
 // estimate both skew high rather than centering on the true value.
