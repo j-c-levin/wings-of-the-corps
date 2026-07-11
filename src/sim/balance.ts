@@ -75,6 +75,13 @@ export const PATRON_MISSION_CHANCE = 0.3
 
 // missions.ts — resolution
 export const LIGHT_WOUND_MAX = 10
+// Severity-1 design ruling: a low-risk mission can NEVER fail — a bad roll
+// costs days, not blood. Wounds from a sev-1 flight are capped far below the
+// failure bands, and a failed roll delays the return instead (a second bad
+// roll on the delayed arrival forces success rather than looping).
+export const SEV1_WOUND_MAX = 4
+export const SEV1_DELAY_MIN_DAYS = 1
+export const SEV1_DELAY_MAX_DAYS = 2
 export const CREW_LOST_SUCCESS_MAX = 2
 export const FAIL_WOUND_MIN = 15
 export const FAIL_WOUND_MAX = 45
@@ -125,6 +132,10 @@ export const RIVAL_INFLUENCE_SPREAD_MIN = -2
 export const RIVAL_INFLUENCE_SPREAD_MAX = 4
 export const AUCTION_TICKS_PER_CLAIM = 5
 export const AUCTION_GRACE_TICKS = 10
+// FTUE honest-ladder margin: back-marker rivals sit this far above your
+// candidate (one AUCTION_BUMP passes them); front-runner rivals sit a further
+// AUCTION_BUMP above THAT, so a single free spend lands you exactly third —
+// see startAuction's scripted branch.
 export const FIRST_AUCTION_RIVAL_MARGIN = 2
 export const JITTER_CHANCE = 0.5
 export const JITTER_SIZE = 1

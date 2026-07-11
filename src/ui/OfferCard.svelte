@@ -30,7 +30,8 @@
   function severityCopy(sev: 1 | 2 | 3): string {
     if (sev === 2) return 'A named officer may not return — and a dragon does not outlive its captain.'
     if (sev === 3) return 'You could lose the dragon.'
-    return ''
+    // Sev 1 cannot fail (resolveMission delays instead) — say so honestly.
+    return 'No lives at hazard — the worst a flight like this costs is time.'
   }
 
   /**
@@ -117,9 +118,15 @@
           onclick={() => (selected = d.id)}
         >
           <span class="name">{d.name}</span>
-          <span class="{riskClass(riskLabel(chance))}">
-            {riskLabel(chance)}{isTrap ? ' (uncertain)' : ` ${Math.round(chance * 100)}%`}
-          </span>
+          {#if mission.severityTier === 1}
+            <!-- Sev-1 missions cannot fail; the chance is the odds of arriving
+                 on schedule rather than a day or two late. -->
+            <span class="dim">{isTrap ? 'may run late (uncertain)' : `${Math.round(chance * 100)}% on schedule`}</span>
+          {:else}
+            <span class="{riskClass(riskLabel(chance))}">
+              {riskLabel(chance)}{isTrap ? ' (uncertain)' : ` ${Math.round(chance * 100)}%`}
+            </span>
+          {/if}
         </button>
       {/each}
     {/if}

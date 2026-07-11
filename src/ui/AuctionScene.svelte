@@ -53,7 +53,7 @@
     {#if canClaim}
       <p>The list waits on you.</p>
     {:else if rivalsLeft && auction.nextClaimIn > 0}
-      <p class="dim">next claim in {auction.nextClaimIn}t</p>
+      <p class="dim">next claim in {auction.nextClaimIn}t — the top name takes the next egg</p>
     {:else}
       <p class="dim">a rival holds the lead — the reckoning waits.</p>
     {/if}

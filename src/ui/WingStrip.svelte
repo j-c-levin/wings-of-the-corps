@@ -2,6 +2,7 @@
   import { game, openSheet } from './store.svelte'
   import { availabilityForecast } from '../sim/projection'
   import { TICKS_PER_DAY } from '../sim/balance'
+  import { BREEDS } from '../sim/content'
   import type { Dragon } from '../sim/types'
 
   const forecast = $derived(availabilityForecast(game.state))
@@ -17,6 +18,11 @@
     const entry = forecast.find((f) => f.dragonId === d.id)
     return entry ? `healing · ready ~D${entry.freeOnDay}` : 'healing'
   }
+
+  function woundsNote(d: Dragon): string {
+    const lasting = Math.round(d.woundsLasting)
+    return `wnd ${Math.round(d.woundsTemp)}${lasting > 0 ? `+${lasting}` : ''}`
+  }
 </script>
 
 <section class="wing-strip">
@@ -25,10 +31,16 @@
   {:else}
     {#each game.state.dragons as dragon (dragon.id)}
       <button type="button" class="dragon-line" onclick={() => openSheet('roster', dragon.id)}>
-        <span class="name">{dragon.name}</span>
-        <span class="cond dim">
-          wnd {Math.round(dragon.woundsTemp)} · cnt {Math.round(dragon.contentment)} · {statusNote(dragon)}
-        </span>
+        <div class="line-head">
+          <span class="name">{dragon.name}</span>
+          <span class="breed dim">{BREEDS[dragon.breed].name} · {BREEDS[dragon.breed].weightClass}</span>
+        </div>
+        <div class="line-stats">
+          <span class="dim">trn {Math.round(dragon.training)}</span>
+          <span class={dragon.woundsTemp > 30 ? 'danger' : 'dim'}>{woundsNote(dragon)}</span>
+          <span class="dim">cnt {Math.round(dragon.contentment)}</span>
+          <span class="status dim">{statusNote(dragon)}</span>
+        </div>
       </button>
     {/each}
   {/if}
@@ -44,20 +56,27 @@
 
   .dragon-line {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.1rem;
     width: 100%;
     text-align: left;
     background: transparent;
     border: none;
     border-radius: 0;
     min-height: 36px;
-    padding: 0.25rem 0;
+    padding: 0.3rem 0;
   }
 
   .dragon-line + .dragon-line {
     border-top: 1px solid var(--line);
+  }
+
+  .line-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    width: 100%;
   }
 
   .name {
@@ -65,8 +84,20 @@
     font-weight: 600;
   }
 
-  .cond {
+  .breed {
+    font-size: 0.78rem;
+  }
+
+  .line-stats {
+    display: flex;
+    gap: 0.7rem;
+    width: 100%;
     font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status {
+    margin-left: auto;
     text-align: right;
   }
 

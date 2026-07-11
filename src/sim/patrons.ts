@@ -112,7 +112,10 @@ function canInjectTrap(state: GameState): boolean {
 
 function injectTrapMission(state: GameState, rng: Rng, patron: Patron): void {
   const kind: MissionKind = state.rung >= 2 ? 'combat' : 'dispatch'
-  const severity: 1 | 2 = state.rung >= 2 ? 2 : 1
+  // Always severity 2: a sev-1 mission cannot fail (it merely runs late), so
+  // a sev-1 trap would be a guaranteed 1.5× payday. The honest tier-2 copy is
+  // the trap's floor; the lie stays in the masked enemy strength.
+  const severity = 2 as const
   const enemyStrength = rng.int(TRAP_ENEMY_MIN, TRAP_ENEMY_MAX)
   const weather = Math.round(rng.next() * 100) / 100
 

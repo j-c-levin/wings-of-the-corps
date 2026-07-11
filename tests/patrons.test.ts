@@ -251,11 +251,12 @@ describe('missions.ts refactor — failure-path patron effects', () => {
       status: 'mission',
       missionId: null,
     })
+    // Severity 2: sev-1 missions can no longer fail (they delay instead).
     const mission: Mission = {
       id: `m${state.nextId}`,
       name: 'Patron Failure',
       kind: 'dispatch',
-      severityTier: 1,
+      severityTier: 2,
       rewardCoin: 10,
       rewardTreasure: 0,
       rewardStanding: 3,
@@ -273,10 +274,10 @@ describe('missions.ts refactor — failure-path patron effects', () => {
     state.nextId += 1
     state.missions.push(mission)
 
-    // Draws on a sev1 failure: 1. success roll (0.99 beats any clamped
+    // Draws on a sev2 failure: 1. success roll (0.99 beats any clamped
     // chance → fail) 2. woundsTemp 3. woundsLasting 4. crewLost
-    // 5. skill-growth (captain alive).
-    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5, 0.99]))
+    // 5. officer-death (0.99 → survives) 6. skill-growth (captain alive).
+    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5, 0.99, 0.99]))
 
     expect(mission.outcome?.success).toBe(false)
     expect(patron.tier).toBe(0) // exactly -1 from its prior value of 1

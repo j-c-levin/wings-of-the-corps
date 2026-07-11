@@ -13,6 +13,7 @@ import {
   AUCTION_TICKS_PER_CLAIM,
   AUCTION_GRACE_TICKS,
   FIRST_AUCTION_RIVAL_MARGIN,
+  AUCTION_BUMP,
   JITTER_CHANCE,
   JITTER_SIZE,
   GIFT_TIER_MIN,
@@ -34,23 +35,32 @@ import {
  * win an egg, enters an incubation ("egg") phase that finally fires a
  * `hatching` decision card.
  *
- * FTUE guarantee (scripted first auction): rivals are pinned exactly
- * FIRST_AUCTION_RIVAL_MARGIN above your candidate — enough that you win
- * nothing on merit, but one AUCTION_BUMP goodwill spend flips you above them
- * for the final winchester. To keep that guarantee deterministic across all
- * seeds, scripted auctions skip the per-tick jitter and patron interventions
- * that a normal auction rolls (they exist only to add variance, which would
- * otherwise defeat a hard tutorial promise). This is a deliberate
- * dispatch-override decision.
+ * FTUE guarantee (scripted first auction) — an HONEST ladder: the top name
+ * on the list always takes the next egg, with no scripted exception. The
+ * guarantee lives entirely in the maths. The first (eggs - 1) rivals are
+ * front-runners pinned FIRST_AUCTION_RIVAL_MARGIN + AUCTION_BUMP above your
+ * candidate; the rest are back-markers pinned FIRST_AUCTION_RIVAL_MARGIN
+ * above. One goodwill spend (+AUCTION_BUMP) therefore lifts you past every
+ * back-marker but no front-runner: you sit exactly THIRD, the two
+ * front-runners take the better eggs in the open, and the final winchester
+ * honestly falls to you. To keep that deterministic across all seeds,
+ * scripted auctions skip the per-tick jitter and patron interventions that a
+ * normal auction rolls (they exist only to add variance, which would defeat
+ * a hard tutorial promise).
+ *
+ * Because the ladder is honest, outspending it is honest too: a player who
+ * burns a SECOND goodwill spend climbs above the front-runners and may claim
+ * a better egg. The FTUE promise is a floor (third place from one free
+ * spend), not a ceiling.
  *
  * The FTUE also cannot be LOST (design ruling): in scripted mode the final
  * winchester is never claimed by a rival, and the auction never expires.
  * Once only the winchester remains, surplus rivals withdraw one per claim
  * boundary until a single holdout is left, still pinned one margin above
- * you. The auction then waits — forever, if need be — for the one goodwill
- * spend that flips you past the holdout, and the claim at the open boundary.
- * Because that holdout never leaves, auctionClaim's "no rivals left" clause
- * can never grant a free claim in scripted mode.
+ * your unbumped candidate. The auction then waits — forever, if need be —
+ * for the one goodwill spend that flips you past the holdout, and the claim
+ * at the open boundary. Because that holdout never leaves, auctionClaim's
+ * "no rivals left" clause can never grant a free claim in scripted mode.
  */
 
 /** The scripted first-auction clutch: one middle, one light, one courier last. */
@@ -90,6 +100,10 @@ export function startAuction(
   // Rival names are flavour only — distinct generated names not already worn
   // by a real officer, falling back to synthetic names if the pool runs dry.
   const namePool = OFFICER_NAMES.map((n) => n.name).filter((n) => !state.officers.some((o) => o.name === n))
+  // Scripted honest ladder: one front-runner per egg you must NOT win (see
+  // the header comment) — a single bump passes the back-markers only, landing
+  // you exactly one place per remaining egg: third of six, for three eggs.
+  const frontRunners = eggs.length - 1
   const bidders: AuctionBidder[] = []
   for (let i = 0; i < AUCTION_RIVALS; i++) {
     let name: string
@@ -99,7 +113,7 @@ export function startAuction(
       name = `Captain ${i + 1}`
     }
     const influence = scripted
-      ? yourInfluence + FIRST_AUCTION_RIVAL_MARGIN
+      ? yourInfluence + FIRST_AUCTION_RIVAL_MARGIN + (i < frontRunners ? AUCTION_BUMP : 0)
       : yourInfluence + rng.int(RIVAL_INFLUENCE_SPREAD_MIN, RIVAL_INFLUENCE_SPREAD_MAX)
     bidders.push({ name, influence, you: false })
   }
@@ -223,14 +237,11 @@ function tickLive(state: GameState, rng: Rng, auction: Auction): void {
   auction.nextClaimIn -= 1
   if (auction.nextClaimIn <= 0) {
     const unclaimed = auction.eggs.filter((e) => e.claimedBy === null)
-    // Scripted FTUE, more than the last egg still up: rivals settle their own
-    // pecking order regardless of where your candidate currently ranks. This
-    // guarantees "the last pick, always a tiny messenger dragon" even if
-    // goodwill is spent early — without it, an early spend would make you
-    // the overall top bidder immediately, freezing the claim boundary before
-    // any rival has taken a turn and letting you claim a BETTER egg than the
-    // FTUE promises.
-    const top = scripted && unclaimed.length > 1 ? (auction.bidders.find((b) => !b.you) ?? null) : auction.bidders[0]
+    // The honest ladder rule, scripted or not: whoever tops the sorted list
+    // takes the next egg. The FTUE's "you get the third pick" promise is
+    // enforced purely by the front-runner/back-marker influence maths in
+    // startAuction, never by overriding this rule.
+    const top = auction.bidders[0]
     if (top && !top.you) {
       if (scripted && unclaimed.length <= 1) {
         // FTUE: the final egg is never taken by a rival. Surplus rivals drift

@@ -21,6 +21,8 @@ import {
   RANK_XP,
   CREW_XP_PER_MISSION,
   REFUSAL_WAR_HEAT_GATE,
+  SEV1_WOUND_MAX,
+  SEV1_DELAY_MIN_DAYS,
 } from '../src/sim/balance'
 import type { Dragon, GameState, Mission } from '../src/sim/types'
 
@@ -121,8 +123,10 @@ describe('resolveMission — forecast honesty', () => {
     for (let i = 0; i < N; i++) {
       const state = newRun(1)
       const dragon = makeDragon(state, { training: 50, contentment: 50 })
+      // Severity 2: sev-1 missions no longer FAIL (a bad roll delays instead),
+      // so the failure-rate honesty claim is now made against tier 2.
       const mission = makeMission(state, {
-        severityTier: 1,
+        severityTier: 2,
         enemyStrength: 3,
         weather: 0.3,
         assignedDragonId: dragon.id,
@@ -159,7 +163,59 @@ describe('projection — kind-aware power', () => {
 })
 
 describe('resolveMission — severity gating', () => {
-  it('sev1 failures never set officerLostId or dragonLost, over 200 seeded resolutions', () => {
+  it('sev1 cannot fail: a failed roll delays the return once instead (mission stays active)', () => {
+    const state = newRun(2)
+    state.pendingCards = []
+    const dragon = makeDragon(state, { training: 0, contentment: 0 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 9,
+      weather: 1,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+    dragon.status = 'mission'
+    dragon.missionId = mission.id
+
+    // 1. success roll (0.99 beats any clamped chance → bad roll)
+    // 2. delay-days roll (0.0 → SEV1_DELAY_MIN_DAYS) 3. delay-wound roll
+    resolveMission(state, mission, scriptedRng([0.99, 0.0, 0.99]))
+
+    expect(mission.status).toBe('active')
+    expect(mission.outcome).toBeNull()
+    expect(mission.returnTick).toBe(state.tickCount + SEV1_DELAY_MIN_DAYS * TICKS_PER_DAY)
+    expect(state.flags[`delayed:${mission.id}`]).toBe(true)
+    expect(dragon.status).toBe('mission')
+    expect(dragon.woundsTemp).toBeLessThanOrEqual(SEV1_WOUND_MAX)
+    expect(state.log.some((l) => l.text.includes('held up'))).toBe(true)
+  })
+
+  it('a second bad roll on the delayed arrival forces success and clears the delay flag', () => {
+    const state = newRun(2)
+    state.pendingCards = []
+    const dragon = makeDragon(state, { training: 0, contentment: 0 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 9,
+      weather: 1,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([0.99, 0.0, 0.5])) // bad roll → delayed
+    state.tickCount = mission.returnTick!
+    // 1. success roll (bad again, but the delay is spent → forced success)
+    // 2. light-wound roll 3. skill-growth roll
+    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.99]))
+
+    expect(mission.status).toBe('done')
+    expect(mission.outcome?.success).toBe(true)
+    expect(state.flags[`delayed:${mission.id}`]).toBeUndefined()
+  })
+
+  it('sev1 always succeeds, never loses anyone, and wounds stay under the caps, over 200 seeded runs', () => {
     const seedPicker = createRng(555)
     for (let i = 0; i < 200; i++) {
       const state = newRun(2)
@@ -172,10 +228,20 @@ describe('resolveMission — severity gating', () => {
         status: 'active',
         returnTick: state.tickCount + 1,
       })
-      const rngState = Math.floor(seedPicker.next() * 0xffffffff)
-      resolveMission(state, mission, createRng(rngState))
+      let guard = 0
+      while (mission.status === 'active' && guard < 5) {
+        state.tickCount = mission.returnTick!
+        const rngState = Math.floor(seedPicker.next() * 0xffffffff)
+        resolveMission(state, mission, createRng(rngState))
+        guard += 1
+      }
+      expect(mission.status).toBe('done')
+      expect(mission.outcome?.success).toBe(true)
       expect(mission.outcome?.officerLostId).toBeNull()
       expect(mission.outcome?.dragonLost).toBe(false)
+      // At most one delay wound plus one arrival wound.
+      expect(dragon.woundsTemp).toBeLessThanOrEqual(2 * SEV1_WOUND_MAX)
+      expect(state.flags[`delayed:${mission.id}`]).toBeUndefined()
     }
   })
 
@@ -401,8 +467,9 @@ describe('resolveMission — aftermath surfacing (final review item 1)', () => {
   it('logs the outcome narrative and pushes a matching aftermath card on failure, narrative including the late addendum', () => {
     const state = newRun(24)
     const dragon = makeDragon(state, { training: 0, contentment: 0 })
+    // Severity 2: sev-1 missions can no longer fail (they delay instead).
     const mission = makeMission(state, {
-      severityTier: 1,
+      severityTier: 2,
       enemyStrength: 9,
       weather: 1,
       deadlineDay: 0, // any resolution day is already past the deadline
@@ -413,7 +480,8 @@ describe('resolveMission — aftermath surfacing (final review item 1)', () => {
     state.tickCount = TICKS_PER_DAY
     state.day = 1
 
-    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5])) // failure, wound rolls, crew-lost roll
+    // failure, wound rolls, crew-lost roll, no officer death, no skill growth
+    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5, 0.99, 0.99]))
 
     const narrative = mission.outcome!.narrative
     expect(narrative).toContain('A promise broken.')
@@ -595,8 +663,9 @@ describe('resolveMission — crew equity conversion', () => {
     const runner = state.officers.find((o) => o.rank === 'runner')!
     const xpBefore = runner.xp
     const dragon = makeDragon(state, { training: 0, contentment: 0 })
+    // Severity 2: sev-1 missions can no longer fail (they delay instead).
     const mission = makeMission(state, {
-      severityTier: 1,
+      severityTier: 2,
       enemyStrength: 9,
       weather: 1,
       assignedDragonId: dragon.id,
@@ -604,7 +673,8 @@ describe('resolveMission — crew equity conversion', () => {
       returnTick: state.tickCount + 1,
     })
 
-    resolveMission(state, mission, scriptedRng([0.99])) // failure
+    // failure, wound rolls, crew-lost roll, no officer death, no skill growth
+    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5, 0.99, 0.99]))
     expect(mission.outcome?.success).toBe(false)
     expect(runner.xp).toBe(xpBefore)
   })
