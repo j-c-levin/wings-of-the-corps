@@ -222,9 +222,16 @@ function tickLive(state: GameState, rng: Rng, auction: Auction): void {
 
   auction.nextClaimIn -= 1
   if (auction.nextClaimIn <= 0) {
-    const top = auction.bidders[0]
+    const unclaimed = auction.eggs.filter((e) => e.claimedBy === null)
+    // Scripted FTUE, more than the last egg still up: rivals settle their own
+    // pecking order regardless of where your candidate currently ranks. This
+    // guarantees "the last pick, always a tiny messenger dragon" even if
+    // goodwill is spent early — without it, an early spend would make you
+    // the overall top bidder immediately, freezing the claim boundary before
+    // any rival has taken a turn and letting you claim a BETTER egg than the
+    // FTUE promises.
+    const top = scripted && unclaimed.length > 1 ? (auction.bidders.find((b) => !b.you) ?? null) : auction.bidders[0]
     if (top && !top.you) {
-      const unclaimed = auction.eggs.filter((e) => e.claimedBy === null)
       if (scripted && unclaimed.length <= 1) {
         // FTUE: the final egg is never taken by a rival. Surplus rivals drift
         // away one per boundary; the LAST rival stays as a permanent holdout

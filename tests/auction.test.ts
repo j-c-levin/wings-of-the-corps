@@ -95,6 +95,51 @@ describe('first-auction FTUE guarantee', () => {
       expect(state.auction?.wonBreed).toBe('winchester')
     }
   })
+
+  it('an EARLY goodwill spend (before any rival has claimed) still only ever secures the winchester (10 seeds)', () => {
+    // Regression: spending goodwill immediately makes you the top bidder
+    // right away. Rivals must still settle yellow-reaper and grey-copper
+    // between themselves before your candidate can claim anything — the
+    // "last pick, always a tiny messenger dragon" promise must hold
+    // regardless of when the spend happens, not just when it happens late.
+    for (const seed of SEEDS) {
+      const state = newRun(seed)
+      state.pendingCards = []
+      startScriptedFirst(state, state.officers[0].id)
+      const patron = state.patrons.find((p) => p.goodwill >= AUCTION_GOODWILL_COST)!
+
+      // Spend before a single tick has run.
+      auctionSpendGoodwill(state, patron.id)
+
+      let claimed = false
+      let guard = 0
+      while (guard < 300) {
+        if (!state.auction || state.auction.concluded) break
+        tick(state)
+        guard += 1
+        const a = state.auction
+        if (!a || a.concluded) break
+
+        // Never allowed to claim while a better egg is still unclaimed.
+        const unclaimed = a.eggs.filter((e) => e.claimedBy === null)
+        if (unclaimed.length > 1) {
+          expect(() => auctionClaim(state, unclaimed[0].breed)).toThrow()
+        }
+
+        if (a.bidders[0]?.you && a.nextClaimIn <= 0) {
+          expect(unclaimed).toHaveLength(1)
+          expect(unclaimed[0].breed).toBe('winchester')
+          auctionClaim(state, 'winchester')
+          claimed = true
+          break
+        }
+      }
+
+      expect(claimed).toBe(true)
+      expect(state.auction?.concluded).toBe(true)
+      expect(state.auction?.wonBreed).toBe('winchester')
+    }
+  })
 })
 
 describe('rival claims', () => {
