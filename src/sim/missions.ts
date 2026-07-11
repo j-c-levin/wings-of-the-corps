@@ -82,6 +82,13 @@ export function tickMissions(state: GameState, rng: Rng): void {
         expiredIds.push(m.id)
         delete state.flags[`trap:${m.id}`] // expired trap offers must not leak their flag
         delete state.flags[`warned:${m.id}`] // nor the trap-warning's one-shot marker
+        if (state.flags[`kazilik-run:${m.id}`]) {
+          // The funded Istanbul Run left to expire: close the questline like
+          // every other expiry path — clean the flag, and say so (the coin
+          // is already spent; the egg simply goes elsewhere).
+          delete state.flags[`kazilik-run:${m.id}`]
+          addLog(state, 'The window for the Istanbul expedition closes unanswered; the Kazilik egg goes to another buyer, your coin with it.')
+        }
         if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
           state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
           addLog(state, `The ${m.name} offer lapses unanswered — the Admiralty notices the refusal.`)

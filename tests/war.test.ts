@@ -508,6 +508,26 @@ describe('kazilik quest', () => {
     expect(state.flags[`kazilik-run:${mission.id}`]).toBeUndefined()
   })
 
+  it('cleans up the kazilik-run flag (and closes the questline with a log) if the funded offer expires unaccepted', () => {
+    const state = financeAtFinaleStart(28)
+    state.coin = 500
+    const card = state.pendingCards.find((c) => c.templateId === 'kazilik-quest')!
+    chooseCardOption(state, card.id, 0)
+    const mission = state.missions.find((m) => m.name === 'The Istanbul Run')!
+    expect(state.flags[`kazilik-run:${mission.id}`]).toBe(true)
+
+    // Never depart a dragon; jump to the tick just before the day boundary
+    // after the offer window lapses, then tick once so tickMissions runs
+    // its day-boundary expiry pass.
+    state.tickCount = (mission.offerExpiresDay + 1) * TICKS_PER_DAY - 1
+    state.day = Math.floor(state.tickCount / TICKS_PER_DAY)
+    tick(state)
+
+    expect(state.missions.find((m) => m.id === mission.id)).toBeUndefined()
+    expect(state.flags[`kazilik-run:${mission.id}`]).toBeUndefined()
+    expect(state.log.some((l) => l.text.includes('Istanbul expedition closes unanswered'))).toBe(true)
+  })
+
   it('resolveKazilikRun is a no-op for a mission with no kazilik-run flag', () => {
     const state = newRun(27)
     const before = JSON.parse(JSON.stringify(state))
