@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { game, act } from './store.svelte'
+  import Sheet from './Sheet.svelte'
+  import { game, act, closeSheet } from './store.svelte'
   import { payTribute } from '../sim/actions'
   import { TRIBUTE_COST } from '../sim/balance'
   import type { Patron } from '../sim/types'
@@ -37,49 +38,51 @@
   }
 </script>
 
-<section class="patrons">
-  {#if game.state.patrons.length === 0}
-    <p class="empty dim">No patrons remain.</p>
-  {:else}
-    {#each game.state.patrons as patron (patron.id)}
-      <div class="patron-card">
-        <div class="patron-head">
-          <span class="name">{patron.name}</span>
-          <span class="epithet dim">{epithet(patron.tier)}</span>
+<Sheet title="People" onclose={closeSheet}>
+  <section class="patrons">
+    {#if game.state.patrons.length === 0}
+      <p class="empty dim">No patrons remain.</p>
+    {:else}
+      {#each game.state.patrons as patron (patron.id)}
+        <div class="patron-card">
+          <div class="patron-head">
+            <span class="name">{patron.name}</span>
+            <span class="epithet dim">{epithet(patron.tier)}</span>
+          </div>
+
+          <div class="tier-meter">
+            {#each dotValues as dotValue (dotValue)}
+              <span
+                class="dot"
+                class:filled={dotFilled(dotValue, patron.tier)}
+                class:danger={dotFilled(dotValue, patron.tier) && dotClass(dotValue) === 'danger'}
+                class:accent={dotFilled(dotValue, patron.tier) && dotClass(dotValue) === 'accent'}
+              ></span>
+            {/each}
+          </div>
+
+          <div class="goodwill dim">goodwill {patron.goodwill}/10</div>
+
+          {#if patron.memory}
+            <p class="memory dim">remembers: {patron.memory}</p>
+          {/if}
+
+          <p class="flavor dim">{flavorCaption(patron.kind)}</p>
+
+          {#if patron.kind === 'transactional'}
+            <button
+              type="button"
+              disabled={game.state.coin < TRIBUTE_COST}
+              onclick={() => tribute(patron.id)}
+            >
+              Send his cut ({TRIBUTE_COST} coin)
+            </button>
+          {/if}
         </div>
-
-        <div class="tier-meter">
-          {#each dotValues as dotValue (dotValue)}
-            <span
-              class="dot"
-              class:filled={dotFilled(dotValue, patron.tier)}
-              class:danger={dotFilled(dotValue, patron.tier) && dotClass(dotValue) === 'danger'}
-              class:accent={dotFilled(dotValue, patron.tier) && dotClass(dotValue) === 'accent'}
-            ></span>
-          {/each}
-        </div>
-
-        <div class="goodwill dim">goodwill {patron.goodwill}/10</div>
-
-        {#if patron.memory}
-          <p class="memory dim">remembers: {patron.memory}</p>
-        {/if}
-
-        <p class="flavor dim">{flavorCaption(patron.kind)}</p>
-
-        {#if patron.kind === 'transactional'}
-          <button
-            type="button"
-            disabled={game.state.coin < TRIBUTE_COST}
-            onclick={() => tribute(patron.id)}
-          >
-            Send his cut ({TRIBUTE_COST} coin)
-          </button>
-        {/if}
-      </div>
-    {/each}
-  {/if}
-</section>
+      {/each}
+    {/if}
+  </section>
+</Sheet>
 
 <style>
   .patron-card {

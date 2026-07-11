@@ -100,6 +100,8 @@ export function tickMissions(state: GameState, rng: Rng): void {
         if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
           state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
           addLog(state, `The ${m.name} offer lapses unanswered — the Admiralty notices the refusal.`)
+        } else {
+          addLog(state, `The ${m.name} offer lapses unanswered.`)
         }
       }
     }
@@ -127,6 +129,7 @@ export function departMission(state: GameState, m: Mission, d: Dragon): void {
   d.missionId = m.id
   delete state.flags[`trap:${m.id}`]
   delete state.flags[`warned:${m.id}`]
+  addLog(state, `${d.name} departs on the ${m.name}.`)
 }
 
 /**
@@ -152,7 +155,9 @@ export function generateOffers(state: GameState, rng: Rng): void {
   while (toGenerate > 0) {
     const openOffers = state.missions.filter((m) => m.status === 'offered').length
     if (openOffers >= MAX_OPEN_OFFERS) break
-    state.missions.push(buildMissionOffer(state, rng))
+    const offer = buildMissionOffer(state, rng)
+    state.missions.push(offer)
+    addLog(state, `Dispatch on the board: the ${offer.name}. Answer by D${offer.offerExpiresDay}.`)
     toGenerate -= 1
   }
 }

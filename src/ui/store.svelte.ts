@@ -8,7 +8,7 @@ import { auctionClaim } from '../sim/auction'
 const SAVE_KEY = 'wings-of-the-corps-save-v1'
 
 export type Speed = 0 | 1 | 4 | 16
-export type Tab = 'covert' | 'missions' | 'roster' | 'people'
+export type SheetId = 'roster' | 'people' | 'provisions'
 
 function params(): URLSearchParams {
   return new URLSearchParams(window.location.search)
@@ -40,13 +40,19 @@ function load(): GameState | null {
   }
 }
 
-export const game = $state<{ state: GameState; speed: Speed; tab: Tab }>({
+export const game = $state<{
+  state: GameState
+  speed: Speed
+  sheet: SheetId | null
+  focusDragonId: string | null
+}>({
   // A ?seed= in the URL always starts a fresh run with that seed and ignores
   // any existing save (see seedFromQuery above); otherwise resume the save,
   // falling back to a fresh random-seeded run if there isn't one.
   state: seedFromQuery !== null ? newRun(seedFromQuery) : (load() ?? newRun(Date.now() % 0xffffffff)),
   speed: 0,
-  tab: 'covert',
+  sheet: null,
+  focusDragonId: null,
 })
 
 export function saveNow(): void {
@@ -63,12 +69,23 @@ export function setSpeed(s: Speed): void {
   game.speed = s
 }
 
+export function openSheet(id: SheetId, focusDragonId: string | null = null): void {
+  game.sheet = id
+  game.focusDragonId = focusDragonId
+}
+
+export function closeSheet(): void {
+  game.sheet = null
+  game.focusDragonId = null
+}
+
 export function restart(): void {
   localStorage.removeItem(SAVE_KEY)
   // Same seed-sharing precedence as the initial load: a URL seed wins.
   game.state = newRun(seedFromQuery ?? Date.now() % 0xffffffff)
   game.speed = 0
-  game.tab = 'covert'
+  game.sheet = null
+  game.focusDragonId = null
   saveNow()
 }
 

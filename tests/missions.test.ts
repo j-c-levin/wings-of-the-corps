@@ -5,7 +5,8 @@ import { createRng } from '../src/sim/rng'
 import type { Rng } from '../src/sim/rng'
 import { departMission, resolveMission, generateOffers } from '../src/sim/missions'
 import { successChance, dragonPowerForKind, riskLabel, availabilityForecast } from '../src/sim/projection'
-import { chooseCardOption } from '../src/sim/actions'
+import { chooseCardOption, declineMission } from '../src/sim/actions'
+import { CARDS } from '../src/sim/cards'
 import {
   TICKS_PER_DAY,
   MAX_OPEN_OFFERS,
@@ -442,9 +443,12 @@ describe('resolveMission — aftermath surfacing (final review item 1)', () => {
     chooseCardOption(state, card.id, 0)
 
     expect(state.pendingCards.some((c) => c.id === card.id)).toBe(false)
-    // Nothing else on state changed — the option is a pure no-op.
+    expect(state.log[state.log.length - 1].text).toBe('Test Mission — returned — So noted.')
+    // Nothing else on state changed besides the pending-card removal and the
+    // card-choice log line — the option itself is a pure no-op.
     const after = JSON.parse(JSON.stringify(state))
     before.pendingCards.splice(cardIndex, 1)
+    before.log.push(after.log[after.log.length - 1])
     expect(after).toEqual(before)
   })
 
@@ -709,5 +713,76 @@ describe('availabilityForecast', () => {
     const entry = availabilityForecast(state).find((f) => f.dragonId === dragon.id)!
     expect(entry.freeOnDay).toBe(state.day + Math.ceil((70 - HEALING_THRESHOLD + 1) / WOUND_HEAL_PER_DAY))
     expect(entry.note).toBe('healing')
+  })
+})
+
+describe('feed log completeness', () => {
+  it('logs each new offer posted to the board', () => {
+    const state = newRun(1)
+    state.pendingCards = []
+    state.auction = null
+    state.day = OFFER_INTERVAL_DAYS
+    const known = new Set(state.missions.map((m) => m.id))
+    const before = state.log.length
+    generateOffers(state, createRng(42))
+    const fresh = state.missions.filter((m) => !known.has(m.id))
+    expect(fresh.length).toBeGreaterThan(0)
+    for (const m of fresh) {
+      expect(state.log.slice(before).some((l) => l.text.includes(m.name))).toBe(true)
+    }
+  })
+
+  it('logs the departure when a dragon takes a mission', () => {
+    const state = newRun(1)
+    const dragon = makeDragon(state, { name: 'Vindicatus' })
+    const mission = makeMission(state, { name: 'Coastal Patrol' })
+    departMission(state, mission, dragon)
+    expect(
+      state.log.some((l) => l.text.includes('Vindicatus') && l.text.includes('Coastal Patrol'))
+    ).toBe(true)
+  })
+
+  it('logs a quiet decline below the war-heat gate', () => {
+    const state = newRun(1)
+    state.warHeat = 0
+    const mission = makeMission(state, { name: 'Quiet Errand' })
+    declineMission(state, mission.id)
+    expect(state.log.some((l) => l.text.includes('Quiet Errand'))).toBe(true)
+  })
+
+  it('logs the decline of a trap offer', () => {
+    const state = newRun(1)
+    const mission = makeMission(state, { name: 'Baited Errand' })
+    state.flags[`trap:${mission.id}`] = true
+    declineMission(state, mission.id)
+    expect(state.log.some((l) => l.text.includes('Baited Errand'))).toBe(true)
+  })
+
+  it('logs an offer expiry below the war-heat gate', () => {
+    const state = newRun(1)
+    state.warHeat = 0
+    state.pendingCards = []
+    state.auction = null
+    const mission = makeMission(state, { name: 'Forgotten Errand', offerExpiresDay: state.day - 1 })
+    for (let i = 0; i < TICKS_PER_DAY; i++) tick(state)
+    expect(state.missions.some((m) => m.id === mission.id)).toBe(false)
+    expect(state.log.some((l) => l.text.includes('Forgotten Errand') && l.text.includes('lapses'))).toBe(true)
+  })
+
+  it('logs the chosen option when a decision card is answered', () => {
+    const state = newRun(1)
+    while (state.pendingCards.length === 0 && state.tickCount < 200 * TICKS_PER_DAY) {
+      tick(state)
+    }
+    expect(state.pendingCards.length).toBeGreaterThan(0)
+    const card = state.pendingCards[0]
+    const template = CARDS[card.templateId]!
+    const options = template.options(state, card.params)
+    const idx = options.findIndex((o) => o.enabled)
+    expect(idx).toBeGreaterThanOrEqual(0)
+    const label = options[idx].label.replace(/\.$/, '')
+    const before = state.log.length
+    chooseCardOption(state, card.id, idx)
+    expect(state.log.slice(before).some((l) => l.text.includes(label))).toBe(true)
   })
 })

@@ -48,12 +48,15 @@ export function declineMission(state: GameState, missionId: Id): void {
 
   if (isTrap) {
     delete state.flags[trapFlag]
+    addLog(state, `You decline the ${mission.name}.`)
     return
   }
 
   if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
     state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
     addLog(state, `You decline the ${mission.name} — the Admiralty notices the refusal.`)
+  } else {
+    addLog(state, `You decline the ${mission.name}.`)
   }
 
   if (mission.patronId) {
@@ -124,6 +127,8 @@ export function chooseCardOption(state: GameState, cardId: Id, optionIndex: numb
   const option = options[optionIndex]
   if (!option) throw new Error(`chooseCardOption: invalid option index ${optionIndex}`)
   if (!option.enabled) throw new Error(`chooseCardOption: option ${optionIndex} is disabled`)
+
+  addLog(state, `${template.title(state, card.params)} — ${option.label.replace(/\.$/, '')}.`)
 
   // Same reconstruct/writeback dance tick.ts does — chooseCardOption is the
   // one player action that needs the RNG.
