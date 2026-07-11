@@ -12,7 +12,7 @@ import {
 import { auctionClaim } from '../src/sim/auction'
 import { successChance } from '../src/sim/projection'
 import { CARDS } from '../src/sim/cards'
-import { FEED_COST, TICKS_PER_DAY, AUCTION_GOODWILL_COST, KAZILIK_COST } from '../src/sim/balance'
+import { FEED_COST, FEED_PRICE, TICKS_PER_DAY, AUCTION_GOODWILL_COST, KAZILIK_COST } from '../src/sim/balance'
 
 /**
  * Headless balance bot. Plays the game ENTIRELY through the public sim surface
@@ -150,7 +150,7 @@ export function botAct(state: GameState): void {
     if (state.feed < target) {
       const short = target - state.feed
       // buyFeed costs FEED_PRICE per unit; buy what we can afford, up to the gap.
-      const affordable = Math.floor(state.coin / 2)
+      const affordable = Math.floor(state.coin / FEED_PRICE)
       const amount = Math.min(short, affordable)
       if (amount >= 1) buyFeed(state, amount)
     }

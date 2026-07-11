@@ -25,3 +25,6 @@ dist-ssr
 
 # Scratch dir for SDD skill; not part of the shipped project
 .superpowers/
+
+# Playwright MCP browser session data
+.playwright-mcp/
