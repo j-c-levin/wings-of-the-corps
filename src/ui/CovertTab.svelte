@@ -6,8 +6,13 @@
   let logEl: HTMLElement | undefined = $state()
 
   $effect(() => {
-    // Read game.state.log so this effect re-runs whenever the log changes.
+    // Re-run whenever the log changes. Length alone is not enough: once the
+    // log reaches LOG_CAP it becomes a front-trimmed ring whose length never
+    // changes again, so also read the newest line's identity.
     void game.state.log.length
+    const last = game.state.log[game.state.log.length - 1]
+    void last?.text
+    void last?.day
     if (logEl) logEl.scrollTop = logEl.scrollHeight
   })
 

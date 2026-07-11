@@ -22,7 +22,7 @@
       <h2>{title}</h2>
       <p class="body">{body}</p>
       <div class="options">
-        {#each options as opt, i (opt.label)}
+        {#each options as opt, i (i)}
           <button class="option" disabled={!opt.enabled} onclick={() => choose(i)}>
             <span class="label">{opt.label}</span>
             <span class="detail dim">{opt.detail}</span>

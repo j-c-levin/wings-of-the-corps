@@ -61,21 +61,25 @@ export function restart(): void {
 interface AutoPauseSnapshot {
   pendingCards: number
   auctionLive: boolean
-  doneMissions: number
+  activeMissions: number
 }
 
 function snapshot(state: GameState): AutoPauseSnapshot {
   return {
     pendingCards: state.pendingCards.length,
     auctionLive: state.auction !== null && !state.auction.concluded,
-    doneMissions: state.missions.filter((m) => m.status === 'done').length,
+    // Active count, not done count: resolveMission prunes done missions down
+    // to DONE_MISSION_CAP, so a "done count grew" check stops firing once the
+    // cap is reached. Departures only happen via player actions — never inside
+    // a tick batch — so a drop in active missions always means a return.
+    activeMissions: state.missions.filter((m) => m.status === 'active').length,
   }
 }
 
 function shouldAutoPause(before: AutoPauseSnapshot, after: AutoPauseSnapshot): boolean {
   const cardsAppeared = before.pendingCards === 0 && after.pendingCards > 0
   const auctionAppeared = !before.auctionLive && after.auctionLive
-  const missionFinished = after.doneMissions > before.doneMissions
+  const missionFinished = after.activeMissions < before.activeMissions
   return cardsAppeared || auctionAppeared || missionFinished
 }
 
