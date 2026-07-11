@@ -111,6 +111,10 @@ export function generateOffers(state: GameState, rng: Rng): void {
 
   const dayFlag = `offers-day-${state.day}`
   if (state.flags[dayFlag]) return
+  // Track only the latest cadence marker — drop stale ones so flags don't grow.
+  for (const key of Object.keys(state.flags)) {
+    if (key.startsWith('offers-day-')) delete state.flags[key]
+  }
   state.flags[dayFlag] = true
 
   let toGenerate = rng.int(1, 2)
@@ -262,6 +266,8 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
       const patron = state.patrons.find((p) => p.id === m.patronId)
       if (patron) {
         patron.goodwill = Math.min(10, patron.goodwill + PATRON_SUCCESS_GOODWILL)
+        patron.tier = Math.min(3, patron.tier + 1)
+        patron.memory = `Remembers: the ${m.name} flown well.`
       }
     }
 
@@ -317,10 +323,19 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     narrative: narrativeParts.join(' '),
   }
 
-  if (state.tickCount > m.deadlineDay * TICKS_PER_DAY) {
+  // Late iff resolution lands on a later DAY than the deadline — same
+  // day-vs-day comparison as offer expiry; any tick of the deadline day
+  // itself is still on time.
+  if (state.day > m.deadlineDay) {
     state.standing = Math.max(0, state.standing - LATE_STANDING_COST)
     m.outcome.narrative += ' A promise broken.'
     addLog(state, `${m.name}: a promise broken — delivered too late to matter.`)
+    if (m.patronId) {
+      const patron = state.patrons.find((p) => p.id === m.patronId)
+      if (patron) {
+        patron.memory = `Remembers: your promise on the ${m.name}, broken.`
+      }
+    }
   }
 
   if (captain && captain.alive) {

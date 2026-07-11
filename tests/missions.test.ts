@@ -3,8 +3,8 @@ import { newRun } from '../src/sim/newRun'
 import { tick } from '../src/sim/tick'
 import { createRng } from '../src/sim/rng'
 import type { Rng } from '../src/sim/rng'
-import { tickMissions, departMission, resolveMission, generateOffers } from '../src/sim/missions'
-import { successChance, riskLabel, availabilityForecast } from '../src/sim/projection'
+import { departMission, resolveMission, generateOffers } from '../src/sim/missions'
+import { successChance, dragonPowerForKind, riskLabel, availabilityForecast } from '../src/sim/projection'
 import {
   TICKS_PER_DAY,
   MAX_OPEN_OFFERS,
@@ -132,7 +132,24 @@ describe('resolveMission — forecast honesty', () => {
     }
 
     const observed = successes / N
+    // ±0.05 is the two-sigma binomial bound at worst-case p=0.5 for N=400 (sigma = 0.025).
     expect(Math.abs(observed - chance)).toBeLessThanOrEqual(0.05)
+  })
+})
+
+describe('projection — kind-aware power', () => {
+  it('gives a courier breed a higher successChance on dispatch than on combat, all else equal', () => {
+    const state = newRun(16)
+    const dragon = makeDragon(state, { breed: 'winchester', training: 50, contentment: 50 })
+    const dispatchMission = makeMission(state, { kind: 'dispatch', enemyStrength: 4, weather: 0.3 })
+    const combatMission = makeMission(state, { kind: 'combat', enemyStrength: 4, weather: 0.3 })
+
+    expect(dragonPowerForKind(state, dragon, 'dispatch')).toBeGreaterThan(
+      dragonPowerForKind(state, dragon, 'combat')
+    )
+    expect(successChance(state, dispatchMission, dragon)).toBeGreaterThan(
+      successChance(state, combatMission, dragon)
+    )
   })
 })
 
@@ -234,30 +251,121 @@ describe('resolveMission — captain-death cascade (sev2)', () => {
 })
 
 describe('resolveMission — late resolution', () => {
-  it('costs standing even on success, past the deadline', () => {
+  const DEADLINE = 5
+
+  /** Forced-success resolution at an exact tickCount (state.day kept consistent). */
+  function resolveAtTick(tickCount: number) {
     const state = newRun(5)
     const dragon = makeDragon(state, { training: 100, contentment: 100 })
     const mission = makeMission(state, {
       severityTier: 1,
       enemyStrength: 0,
       weather: 0,
-      deadlineDay: 1,
+      deadlineDay: DEADLINE,
       rewardStanding: 5,
       assignedDragonId: dragon.id,
       status: 'active',
-      returnTick: state.tickCount + 1,
+      returnTick: tickCount,
     })
-    state.tickCount = (mission.deadlineDay + 1) * TICKS_PER_DAY
+    state.tickCount = tickCount
+    state.day = Math.floor(tickCount / TICKS_PER_DAY)
     const standingBefore = state.standing
 
     // 1. success roll (0.0 always beats a positive chance) 2. light-wound roll
     // 3. skill-growth roll (sev1 success draws no crewLost roll)
     const rng = scriptedRng([0.0, 0.5, 0.99])
     resolveMission(state, mission, rng)
-
     expect(mission.outcome?.success).toBe(true)
+    return { state, mission, standingBefore }
+  }
+
+  it('is NOT late on the 2nd tick of the deadline day itself', () => {
+    const { state, mission, standingBefore } = resolveAtTick(DEADLINE * TICKS_PER_DAY + 1)
+    expect(state.standing).toBe(standingBefore + mission.rewardStanding)
+    expect(mission.outcome?.narrative.toLowerCase()).not.toContain('broken')
+  })
+
+  it('is NOT late on the 3rd (final) tick of the deadline day itself', () => {
+    const { state, mission, standingBefore } = resolveAtTick(DEADLINE * TICKS_PER_DAY + TICKS_PER_DAY - 1)
+    expect(state.standing).toBe(standingBefore + mission.rewardStanding)
+    expect(mission.outcome?.narrative.toLowerCase()).not.toContain('broken')
+  })
+
+  it('costs standing even on success, resolved the day after the deadline', () => {
+    const { state, mission, standingBefore } = resolveAtTick((DEADLINE + 1) * TICKS_PER_DAY)
     expect(state.standing).toBe(standingBefore + mission.rewardStanding - LATE_STANDING_COST)
     expect(mission.outcome?.narrative.toLowerCase()).toContain('broken')
+  })
+})
+
+describe('resolveMission — patron effects', () => {
+  it('bumps patron tier +1 (clamped at +3), grants goodwill, and writes a memory line on success', () => {
+    const state = newRun(17)
+    const patron = state.patrons.find((p) => p.kind === 'gratitude')!
+    patron.tier = 3 // already at the cap — clamp must hold
+    const goodwillBefore = patron.goodwill
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      patronId: patron.id,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    const rng = scriptedRng([0.0, 0.5, 0.99]) // success, light wound, no skill growth
+    resolveMission(state, mission, rng)
+
+    expect(mission.outcome?.success).toBe(true)
+    expect(patron.tier).toBe(3)
+    expect(patron.goodwill).toBe(Math.min(10, goodwillBefore + 1))
+    expect(patron.memory).toContain(mission.name)
+    expect(patron.memory.toLowerCase()).toContain('flown well')
+  })
+
+  it('bumps patron tier from below the cap on success', () => {
+    const state = newRun(18)
+    const patron = state.patrons.find((p) => p.kind === 'transactional')!
+    expect(patron.tier).toBe(0)
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      patronId: patron.id,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([0.0, 0.5, 0.99]))
+    expect(patron.tier).toBe(1)
+  })
+
+  it('writes a broken-promise memory line on late resolution of a patron mission', () => {
+    const state = newRun(19)
+    const patron = state.patrons.find((p) => p.kind === 'gratitude')!
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      deadlineDay: 2,
+      patronId: patron.id,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+    state.tickCount = 3 * TICKS_PER_DAY
+    state.day = 3 // one day past the deadline
+
+    resolveMission(state, mission, scriptedRng([0.0, 0.5, 0.99]))
+
+    expect(mission.outcome?.success).toBe(true)
+    expect(patron.memory).toContain(mission.name)
+    expect(patron.memory.toLowerCase()).toContain('broken')
   })
 })
 

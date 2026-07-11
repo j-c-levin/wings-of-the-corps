@@ -38,7 +38,7 @@ export interface MissionOutcome {
   woundsTemp: number; woundsLasting: number
   crewLost: number             // unnamed ground-crew count
   officerLostId: Id | null     // severity 2+
-  dragonLost: boolean          // severity 3 only
+  dragonLost: boolean          // lost on sev-3 failure, or via sev-2 captain-death cascade
   narrative: string
 }
 export interface Mission {

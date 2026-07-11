@@ -1,4 +1,4 @@
-import type { Dragon, GameState, Id, Mission } from './types'
+import type { Dragon, GameState, Id, Mission, MissionKind } from './types'
 import { BREEDS } from './content'
 import {
   BASE_SUCCESS,
@@ -26,16 +26,10 @@ import {
  * THE shared honesty layer. Both the UI's risk read and the mission
  * resolver call these exact functions — the forecast can never lie,
  * because it is not a separate estimate, it is the real calculation.
- *
- * Breed "power" here is a mission-kind-agnostic potency figure: the
- * average of a breed's dispatchPower and combatPower from content.ts.
- * successChance() does not vary dragonPower by the mission's kind (its
- * signature is state+dragon only, per the binding spec), so kind-specific
- * strengths/weaknesses are deliberately averaged out at this layer.
  */
-export function dragonPower(state: GameState, d: Dragon): number {
-  const breed = BREEDS[d.breed]
-  const basePower = (breed.dispatchPower + breed.combatPower) / 2
+
+/** Training/wounds/contentment/captain multipliers shared by both power reads. */
+function scaledPower(state: GameState, d: Dragon, basePower: number): number {
   const trainingFactor = 0.5 + d.training / 200
   const woundFactor = 1 - d.woundsTemp / 150 - d.woundsLasting / 100
   const contentmentFactor = CONTENTMENT_FACTOR_BASE + CONTENTMENT_FACTOR_SCALE * (d.contentment / 100)
@@ -48,9 +42,33 @@ export function dragonPower(state: GameState, d: Dragon): number {
   return Math.max(DRAGON_POWER_MIN, power)
 }
 
+/**
+ * Kind-aware power — what successChance actually uses. Couriers excel at
+ * dispatch (BREEDS dispatchPower), combat breeds at fighting (combatPower,
+ * used for 'combat'/'formation'/'war'), so a Winchester on a combat mission
+ * is genuinely bad, per the breed table's intent.
+ */
+export function dragonPowerForKind(state: GameState, d: Dragon, kind: MissionKind): number {
+  const breed = BREEDS[d.breed]
+  const basePower = kind === 'dispatch' ? breed.dispatchPower : breed.combatPower
+  return scaledPower(state, d, basePower)
+}
+
+/**
+ * Kind-agnostic general-readiness figure (average of a breed's dispatch and
+ * combat power) — for roster/condition display, not for mission odds.
+ */
+export function dragonPower(state: GameState, d: Dragon): number {
+  const breed = BREEDS[d.breed]
+  return scaledPower(state, d, (breed.dispatchPower + breed.combatPower) / 2)
+}
+
 export function successChance(state: GameState, m: Mission, d: Dragon): number {
   const raw =
-    BASE_SUCCESS - ENEMY_WEIGHT * m.enemyStrength + READINESS_WEIGHT * dragonPower(state, d) - WEATHER_WEIGHT * m.weather
+    BASE_SUCCESS -
+    ENEMY_WEIGHT * m.enemyStrength +
+    READINESS_WEIGHT * dragonPowerForKind(state, d, m.kind) -
+    WEATHER_WEIGHT * m.weather
   return Math.min(MAX_SUCCESS, Math.max(MIN_SUCCESS, raw))
 }
 
