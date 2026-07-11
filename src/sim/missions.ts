@@ -58,6 +58,14 @@ import {
 
 type OfferableKind = Exclude<MissionKind, 'war'>
 
+/** Pushes a new pending card. Same idiom as war.ts's and auction.ts's local
+ * pushCard — resolveMission pushes regardless of what else is pending
+ * (matching the precedent of the hatching/bypassed-officer cards). */
+function pushCard(state: GameState, templateId: string, params: Record<string, string | number>): void {
+  state.pendingCards.push({ id: `c${state.nextId}`, templateId, params })
+  state.nextId += 1
+}
+
 /**
  * Advances mission state by one tick:
  *  (a) resolves any active mission whose returnTick has arrived — every tick.
@@ -253,6 +261,8 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
       dragonLost: false,
       narrative: `${m.name}: the assigned dragon could not be found; the mission is written off.`,
     }
+    addLog(state, m.outcome.narrative)
+    pushCard(state, 'aftermath', { name: m.name, success: 0, narrative: m.outcome.narrative })
     resolveKazilikRun(state, m.id, false)
     pruneDoneMissions(state)
     return
@@ -360,6 +370,14 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     d.status = 'home'
     d.missionId = null
   }
+
+  // Final review item 1: the covert log records every return, and a single
+  // deterministic (rng-free) 'aftermath' decision card lets the player
+  // acknowledge it — pushed only now that the outcome above is fully
+  // applied, so the card's narrative snapshot (including any late-promise
+  // addendum) always matches what actually happened.
+  addLog(state, m.outcome.narrative)
+  pushCard(state, 'aftermath', { name: m.name, success: success ? 1 : 0, narrative: m.outcome.narrative })
 
   // Task 8's Kazilik quest: a no-op unless this mission carries the
   // kazilik-run:<id> flag set by the card's "fund the expedition" option.

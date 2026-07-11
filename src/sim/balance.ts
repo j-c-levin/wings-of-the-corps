@@ -181,4 +181,15 @@ export const SCORE_PER_DRAGON_WEIGHT: Record<'courier' | 'light' | 'middle' | 'h
 export const SCORE_PER_OFFICER = 3
 export const SCORE_PER_PATRON_TIER = 5
 export const KAZILIK_COST = 120
-export const TREASURE_KAZILIK_CONSOLATION = 5
+// Consolation treasure when a hatched egg has no eligible officer to bond it
+// to — originally Kazilik-only, now shared by cards.ts's hatching-guard
+// fallback (item 2 of the final review) since both are "no candidate free,
+// sell the egg on" outcomes.
+export const TREASURE_EGG_CONSOLATION = 5
+
+// MissionsTab.svelte — trap display mask (item 4 of the final review). The
+// spread is asymmetric on purpose: a trap always under-reports how bad the
+// enemy strength could be, so the displayed range and the pessimistic-picker
+// estimate both skew high rather than centering on the true value.
+export const TRAP_DISPLAY_SPREAD_LOW = 1
+export const TRAP_DISPLAY_SPREAD_HIGH = 3

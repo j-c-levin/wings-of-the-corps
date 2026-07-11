@@ -5,6 +5,7 @@ import { createRng } from '../src/sim/rng'
 import type { Rng } from '../src/sim/rng'
 import { departMission, resolveMission, generateOffers } from '../src/sim/missions'
 import { successChance, dragonPowerForKind, riskLabel, availabilityForecast } from '../src/sim/projection'
+import { chooseCardOption } from '../src/sim/actions'
 import {
   TICKS_PER_DAY,
   MAX_OPEN_OFFERS,
@@ -369,6 +370,99 @@ describe('resolveMission — patron effects', () => {
     expect(mission.outcome?.success).toBe(true)
     expect(patron.memory).toContain(mission.name)
     expect(patron.memory.toLowerCase()).toContain('broken')
+  })
+})
+
+describe('resolveMission — aftermath surfacing (final review item 1)', () => {
+  it('logs the outcome narrative and pushes a matching aftermath card on success', () => {
+    const state = newRun(23)
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([0.0, 0.5, 0.99])) // success, light wound, no skill growth
+
+    expect(mission.outcome).not.toBeNull()
+    const narrative = mission.outcome!.narrative
+    expect(state.log[state.log.length - 1].text).toBe(narrative)
+
+    const card = state.pendingCards.find((c) => c.templateId === 'aftermath')
+    expect(card).toBeDefined()
+    expect(card!.params).toEqual({ name: mission.name, success: 1, narrative })
+  })
+
+  it('logs the outcome narrative and pushes a matching aftermath card on failure, narrative including the late addendum', () => {
+    const state = newRun(24)
+    const dragon = makeDragon(state, { training: 0, contentment: 0 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 9,
+      weather: 1,
+      deadlineDay: 0, // any resolution day is already past the deadline
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+    state.tickCount = TICKS_PER_DAY
+    state.day = 1
+
+    resolveMission(state, mission, scriptedRng([0.99, 0.5, 0.5, 0.5])) // failure, wound rolls, crew-lost roll
+
+    const narrative = mission.outcome!.narrative
+    expect(narrative).toContain('A promise broken.')
+    expect(state.log[state.log.length - 1].text).toBe(narrative)
+
+    const card = state.pendingCards.find((c) => c.templateId === 'aftermath')
+    expect(card).toBeDefined()
+    expect(card!.params).toEqual({ name: mission.name, success: 0, narrative })
+  })
+
+  it('choosing the aftermath card\'s single option removes it and mutates nothing else', () => {
+    const state = newRun(25)
+    const dragon = makeDragon(state, { training: 100, contentment: 100 })
+    const mission = makeMission(state, {
+      severityTier: 1,
+      enemyStrength: 0,
+      weather: 0,
+      assignedDragonId: dragon.id,
+      status: 'active',
+      returnTick: state.tickCount + 1,
+    })
+    resolveMission(state, mission, scriptedRng([0.0, 0.5, 0.99]))
+    const card = state.pendingCards.find((c) => c.templateId === 'aftermath')!
+    const cardIndex = state.pendingCards.indexOf(card)
+    const before = JSON.parse(JSON.stringify(state))
+
+    chooseCardOption(state, card.id, 0)
+
+    expect(state.pendingCards.some((c) => c.id === card.id)).toBe(false)
+    // Nothing else on state changed — the option is a pure no-op.
+    const after = JSON.parse(JSON.stringify(state))
+    before.pendingCards.splice(cardIndex, 1)
+    expect(after).toEqual(before)
+  })
+
+  it('the missing-assigned-dragon fallback path also logs and pushes an aftermath card', () => {
+    const state = newRun(26)
+    const mission = makeMission(state, {
+      status: 'active',
+      assignedDragonId: 'no-such-dragon',
+      returnTick: state.tickCount + 1,
+    })
+
+    resolveMission(state, mission, scriptedRng([]))
+
+    const narrative = mission.outcome!.narrative
+    expect(state.log[state.log.length - 1].text).toBe(narrative)
+    const card = state.pendingCards.find((c) => c.templateId === 'aftermath')
+    expect(card).toBeDefined()
+    expect(card!.params).toEqual({ name: mission.name, success: 0, narrative })
   })
 })
 

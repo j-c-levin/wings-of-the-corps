@@ -20,7 +20,8 @@ import {
   SCORE_PER_DRAGON_WEIGHT,
   SCORE_PER_OFFICER,
   SCORE_PER_PATRON_TIER,
-  TREASURE_KAZILIK_CONSOLATION,
+  TREASURE_EGG_CONSOLATION,
+  EXPECTATION_FLOOR_BY_RUNG,
 } from '../src/sim/balance'
 import type { Dragon, GameState } from '../src/sim/types'
 
@@ -186,6 +187,22 @@ describe('finale trigger and the rung-1 hold', () => {
     const endDayFlag = Object.keys(state.flags).find((k) => k.startsWith('finale-end-day-'))
     expect(endDayFlag).toBeDefined()
     expect(Number(endDayFlag!.slice('finale-end-day-'.length))).toBe(state.day + FINALE_LENGTH_DAYS)
+  })
+
+  it('wires rung to 4 the moment the finale starts, giving expectation the rung-4 floor of 55', () => {
+    const state = newRun(50)
+    state.pendingCards = []
+    state.warHeat = 100
+    state.rung = 2
+    state.standing = 0
+    // Full tick() engine (not stepWarDay) so runDailyUpkeep's expectation
+    // formula actually runs on the same day tickWar sets rung to 4.
+    for (let i = 0; i < TICKS_PER_DAY; i++) tick(state)
+
+    expect(state.finaleStarted).toBe(true)
+    expect(state.rung).toBe(4)
+    expect(EXPECTATION_FLOOR_BY_RUNG[4]).toBe(55)
+    expect(state.expectation).toBe(55)
   })
 })
 
@@ -488,7 +505,7 @@ describe('kazilik quest', () => {
     expect(state.pendingCards.some((c) => c.templateId === 'hatching')).toBe(false)
     // Mission success pays its own rewardTreasure on top of the Kazilik
     // consolation grant — both land in the same resolveMission call.
-    expect(state.treasure).toBe(treasureBefore + rewardTreasure + TREASURE_KAZILIK_CONSOLATION)
+    expect(state.treasure).toBe(treasureBefore + rewardTreasure + TREASURE_EGG_CONSOLATION)
   })
 
   it('on scripted failure, clears the flag and mourns without pushing a hatching card', () => {

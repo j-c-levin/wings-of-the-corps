@@ -22,6 +22,7 @@ import {
   GIFT_TIER_MIN,
   TRAP_WARNING_CHANCE,
   KAZILIK_COST,
+  TREASURE_EGG_CONSOLATION,
 } from './balance'
 
 /**
@@ -110,6 +111,16 @@ const sponsorship: CardTemplate = {
   },
 }
 
+/** True when the candidate is no longer eligible for hatchEgg — missing,
+ * dead, or already a captain (hatchEgg's own three throw conditions). A
+ * candidate can go stale between the auction/quest that named them and the
+ * card actually resolving (e.g. dying on a mission in the meantime), which
+ * would otherwise crash chooseCardOption on an unconditional hatchEgg call. */
+function candidateUnfit(state: GameState, officerId: string): boolean {
+  const officer = state.officers.find((o) => o.id === officerId)
+  return !officer || !officer.alive || officer.rank === 'captain'
+}
+
 const hatching: CardTemplate = {
   title: () => 'An Egg Hatches',
   body(state, params) {
@@ -119,18 +130,52 @@ const hatching: CardTemplate = {
     const officerName = officer ? officer.name : 'your candidate'
     return `A young ${breedName} breaks its shell in the incubation shed, and will suffer no hand near it but ${officerName}'s.`
   },
-  options(_state, params) {
+  options(state, params) {
+    const officerId = String(params.officerId)
+    if (candidateUnfit(state, officerId)) {
+      return [
+        {
+          label: 'Send the egg to the breeding grounds',
+          detail: 'No candidate stands free to bond it — it is raised apart, and sold on in time.',
+          enabled: true,
+          apply(state) {
+            state.treasure += TREASURE_EGG_CONSOLATION
+            addLog(state, 'With no captain free to bond it, the hatchling is sent to the breeding grounds instead.')
+          },
+        },
+      ]
+    }
     return [
       {
         label: 'Welcome them to the covert',
         detail: 'Formalize the bond — your candidate takes the harness and becomes captain.',
         enabled: true,
         apply(state, rng) {
-          hatchEgg(state, rng, params.breed as BreedId, String(params.officerId))
+          hatchEgg(state, rng, params.breed as BreedId, officerId)
         },
       },
     ]
   },
+}
+
+/** Item 1 of the final review: a pure epilogue card fired after every mission
+ * resolution — resolveMission pushes it deterministically (no rng involved),
+ * always with a single no-op acknowledgement so it can never soft-lock or
+ * change outcomes already applied. */
+const aftermath: CardTemplate = {
+  title: (_state, params) => `${params.name}${params.success ? ' — returned' : ' — a hard return'}`,
+  body: (_state, params) => String(params.narrative),
+  options: () => [
+    {
+      label: 'So noted.',
+      detail: '',
+      enabled: true,
+      apply() {
+        // Intentionally a no-op — the outcome is already fully applied by
+        // resolveMission before this card is ever pushed.
+      },
+    },
+  ],
 }
 
 /** Highest-skill living lieutenant not already a captain. */
@@ -362,6 +407,7 @@ export const CARDS: Record<string, CardTemplate> = {
   'war-rumor-mid': warRumorMid,
   'war-rumor-high': warRumorHigh,
   'kazilik-quest': kazilikQuest,
+  aftermath,
 }
 
 function pushCard(state: GameState, templateId: string, params: Record<string, string | number>): void {

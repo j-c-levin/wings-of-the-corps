@@ -18,6 +18,7 @@ import {
   TRIBUTE_GOODWILL,
   TRIBUTE_DEMAND_INTERVAL_DAYS,
   GIFT_TIER_MIN,
+  TREASURE_EGG_CONSOLATION,
 } from '../src/sim/balance'
 import type { CardInstance, GameState, Mission } from '../src/sim/types'
 
@@ -146,6 +147,66 @@ describe('FTUE spine end-to-end', () => {
     const captain = state.officers.find((o) => o.id === dragon.captainId)!
     expect(captain.rank).toBe('captain')
     expect(captain.dragonId).toBe(dragon.id)
+  })
+})
+
+describe('hatching card — soft-lock guard (final review item 2)', () => {
+  it('offers the normal welcome option when the candidate is still eligible', () => {
+    const state = newRun(27)
+    const officer = state.officers.find((o) => o.rank !== 'captain')!
+    const params = { breed: 'winchester', officerId: officer.id }
+
+    const options = CARDS.hatching.options(state, params)
+
+    expect(options).toHaveLength(1)
+    expect(options[0].label).toBe('Welcome them to the covert')
+  })
+
+  it('falls back to the breeding-grounds option when the candidate is already a captain, and resolves without throwing', () => {
+    const state = newRun(28)
+    state.pendingCards = []
+    hatchEgg(state, createRng(1), 'winchester', state.officers[0].id) // now a captain
+    state.pendingCards = []
+    const params = { breed: 'grey-copper', officerId: state.officers[0].id }
+
+    const options = CARDS.hatching.options(state, params)
+    expect(options).toHaveLength(1)
+    expect(options[0].label).toBe('Send the egg to the breeding grounds')
+    expect(options[0].enabled).toBe(true)
+
+    const treasureBefore = state.treasure
+    expect(() => options[0].apply(state, createRng(1))).not.toThrow()
+    expect(state.treasure).toBe(treasureBefore + TREASURE_EGG_CONSOLATION)
+  })
+
+  it('falls back when the candidate officer is dead', () => {
+    const state = newRun(29)
+    const officer = state.officers.find((o) => o.rank !== 'captain')!
+    officer.alive = false
+    const params = { breed: 'winchester', officerId: officer.id }
+
+    const options = CARDS.hatching.options(state, params)
+    expect(options[0].label).toBe('Send the egg to the breeding grounds')
+  })
+
+  it('falls back when the candidate officer id no longer matches any officer', () => {
+    const state = newRun(30)
+    const params = { breed: 'winchester', officerId: 'no-such-officer' }
+
+    const options = CARDS.hatching.options(state, params)
+    expect(options[0].label).toBe('Send the egg to the breeding grounds')
+  })
+
+  it('resolving a fallback card end-to-end via chooseCardOption removes the card and does not throw', () => {
+    const state = newRun(31)
+    state.pendingCards = []
+    hatchEgg(state, createRng(1), 'winchester', state.officers[0].id) // now a captain
+    state.pendingCards = []
+    const card: CardInstance = { id: 'c-test-hatch', templateId: 'hatching', params: { breed: 'grey-copper', officerId: state.officers[0].id } }
+    state.pendingCards.push(card)
+
+    expect(() => chooseCardOption(state, card.id, 0)).not.toThrow()
+    expect(state.pendingCards.some((c) => c.id === card.id)).toBe(false)
   })
 })
 

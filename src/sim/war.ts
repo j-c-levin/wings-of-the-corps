@@ -30,7 +30,7 @@ import {
   SCORE_PER_DRAGON_WEIGHT,
   SCORE_PER_OFFICER,
   SCORE_PER_PATRON_TIER,
-  TREASURE_KAZILIK_CONSOLATION,
+  TREASURE_EGG_CONSOLATION,
 } from './balance'
 
 /**
@@ -159,7 +159,7 @@ function bestKazilikCandidate(state: GameState): Officer | null {
  * unless that mission carries a `kazilik-run:<id>` flag (set by the Kazilik
  * quest card's "fund" option). On success, offers the egg to the best free
  * candidate via a 'hatching' card (breed 'kazilik'), or — if no one is free
- * to bond — sells it on for TREASURE_KAZILIK_CONSOLATION treasure. On
+ * to bond — sells it on for TREASURE_EGG_CONSOLATION treasure. On
  * failure, just mourns it. Either way the flag is a one-shot and is cleared.
  */
 export function resolveKazilikRun(state: GameState, missionId: Id, success: boolean): void {
@@ -172,7 +172,7 @@ export function resolveKazilikRun(state: GameState, missionId: Id, success: bool
     if (candidate) {
       pushCard(state, 'hatching', { breed: 'kazilik', officerId: candidate.id })
     } else {
-      state.treasure += TREASURE_KAZILIK_CONSOLATION
+      state.treasure += TREASURE_EGG_CONSOLATION
       addLog(state, 'The Kazilik egg arrives safely, but no officer stands free to bond it — it is sold on as treasure instead.')
     }
   } else {
@@ -263,6 +263,12 @@ export function tickWar(state: GameState, rng: Rng): void {
 
   if (!state.finaleStarted && state.warHeat >= FINALE_HEAT && state.rung >= 2) {
     state.finaleStarted = true
+    // Wired to rung 4 the moment the finale starts (whether that's the
+    // instant heat crosses FINALE_HEAT at rung>=2, or the deferred trigger
+    // once a rung-1 hold catches up to rung 2) — this is what gives the
+    // finale its intended expectation floor of 55 (EXPECTATION_FLOOR_BY_RUNG),
+    // per that constant's own comment.
+    state.rung = 4
     state.flags[`finale-end-day-${state.day + FINALE_LENGTH_DAYS}`] = true
     addLog(state, "INVASION: the beacons burn from Kent to Cornwall — Bonaparte's fleet is in the Channel at last.")
   }

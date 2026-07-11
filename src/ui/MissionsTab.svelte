@@ -2,7 +2,7 @@
   import { game, act } from './store.svelte'
   import { acceptMission, declineMission } from '../sim/actions'
   import { availabilityForecast, successChance, riskLabel } from '../sim/projection'
-  import { TICKS_PER_DAY, REFUSAL_WAR_HEAT_GATE } from '../sim/balance'
+  import { TICKS_PER_DAY, REFUSAL_WAR_HEAT_GATE, TRAP_DISPLAY_SPREAD_LOW, TRAP_DISPLAY_SPREAD_HIGH } from '../sim/balance'
   import type { Dragon, Mission } from '../sim/types'
 
   // Per-mission selected dragon id, for the accept picker.
@@ -21,7 +21,10 @@
   function forecastNote(entry: { freeOnDay: number; note: string }): string {
     if (entry.note === 'ready') return 'ready'
     if (entry.note === 'healing') return `healing until ~D${entry.freeOnDay}`
-    return `returns D${entry.freeOnDay}`
+    // "ready ~D{n}" not "returns D{n}": freeOnDay already folds in the sev>=2
+    // healing-padding estimate from availabilityForecast, so promising an
+    // exact return day would overclaim precision the sim doesn't have.
+    return `ready ~D${entry.freeOnDay}`
   }
 
   const forecast = $derived(availabilityForecast(game.state))
@@ -44,7 +47,7 @@
   }
 
   function severityCopy(sev: 1 | 2 | 3): string {
-    if (sev === 2) return 'A named officer may not return.'
+    if (sev === 2) return 'A named officer may not return — and a dragon does not outlive its captain.'
     if (sev === 3) return 'You could lose the dragon.'
     return ''
   }
@@ -55,18 +58,20 @@
 
   /**
    * Trap offers hide their true enemy strength; this builds a display-only
-   * shallow copy at the pessimistic end (enemyStrength = min(10, n+2)) so the
-   * dragon picker's risk label reflects the worst case the player might face,
-   * never the real (hidden) value.
+   * shallow copy at the pessimistic end (enemyStrength = min(10, n+HIGH)) so
+   * the dragon picker's risk label reflects the worst case the player might
+   * face, never the real (hidden) value. The mask is asymmetric — see
+   * TRAP_DISPLAY_SPREAD_LOW/HIGH in balance.ts — so the displayed midpoint no
+   * longer equals the true value either.
    */
   function pessimisticMission(m: Mission): Mission {
-    return { ...m, enemyStrength: Math.min(10, m.enemyStrength + 2) }
+    return { ...m, enemyStrength: Math.min(10, m.enemyStrength + TRAP_DISPLAY_SPREAD_HIGH) }
   }
 
   function enemyDisplay(m: Mission): string {
     if (isTrap(m.id)) {
-      const lo = Math.max(0, m.enemyStrength - 2)
-      const hi = Math.min(10, m.enemyStrength + 2)
+      const lo = Math.max(0, m.enemyStrength - TRAP_DISPLAY_SPREAD_LOW)
+      const hi = Math.min(10, m.enemyStrength + TRAP_DISPLAY_SPREAD_HIGH)
       return `enemy ${lo}–${hi}/10 (uncertain)`
     }
     return `enemy ${m.enemyStrength}/10`

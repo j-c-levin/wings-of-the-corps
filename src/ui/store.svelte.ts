@@ -14,11 +14,19 @@ function params(): URLSearchParams {
   return new URLSearchParams(window.location.search)
 }
 
-function seedFromUrl(): number {
+/** The `?seed=` query param, if present and a finite number — else null. */
+function urlSeed(): number | null {
   const seedParam = params().get('seed')
-  const parsed = seedParam !== null ? Number(seedParam) : NaN
-  return Number.isFinite(parsed) ? parsed : Date.now() % 0xffffffff
+  if (seedParam === null) return null
+  const parsed = Number(seedParam)
+  return Number.isFinite(parsed) ? parsed : null
 }
+
+// Computed once at module load: a URL seed is a request to reproduce a
+// specific run (e.g. a shared bug report or a balance-check link), which
+// beats resuming whatever save happens to be in localStorage — seed-sharing
+// beats resume when both are asked for.
+const seedFromQuery = urlSeed()
 
 function load(): GameState | null {
   try {
@@ -33,7 +41,10 @@ function load(): GameState | null {
 }
 
 export const game = $state<{ state: GameState; speed: Speed; tab: Tab }>({
-  state: load() ?? newRun(seedFromUrl()),
+  // A ?seed= in the URL always starts a fresh run with that seed and ignores
+  // any existing save (see seedFromQuery above); otherwise resume the save,
+  // falling back to a fresh random-seeded run if there isn't one.
+  state: seedFromQuery !== null ? newRun(seedFromQuery) : (load() ?? newRun(Date.now() % 0xffffffff)),
   speed: 0,
   tab: 'covert',
 })
@@ -54,7 +65,8 @@ export function setSpeed(s: Speed): void {
 
 export function restart(): void {
   localStorage.removeItem(SAVE_KEY)
-  game.state = newRun(Date.now() % 0xffffffff)
+  // Same seed-sharing precedence as the initial load: a URL seed wins.
+  game.state = newRun(seedFromQuery ?? Date.now() % 0xffffffff)
   game.speed = 0
   game.tab = 'covert'
   saveNow()
