@@ -431,6 +431,11 @@ export function hatchEgg(state: GameState, rng: Rng, breed: BreedId, officerId: 
     throw new Error(`hatchEgg: officer ${officerId} is already a captain`)
   }
 
+  // Captured before promotion for the bypassed-officer check below, and
+  // before pushing the new dragon so it reflects prior state.
+  const preHatchRank = officer.rank
+  const hadPriorDragon = state.dragons.length > 0
+
   const dragonId = `d${state.nextId}`
   state.nextId += 1
   const dragon: Dragon = {
@@ -460,5 +465,29 @@ export function hatchEgg(state: GameState, rng: Rng, breed: BreedId, officerId: 
   } else if (state.dragons.length === 3) {
     state.rung = 3
     addLog(state, 'Dispatch from the Admiralty: a third dragon earns your covert the third rung.')
+  }
+
+  // The bypassed-officer card (Task 7): a life-sim beat that only makes
+  // sense once the covert already has a captain — its FIRST captaincy can
+  // never "bypass" anyone, there being no prior captains to compare rank
+  // against. From the second captaincy on, if the officer just promoted
+  // was junior to some other living, still-uncaptained officer, that
+  // senior officer has been passed over.
+  if (hadPriorDragon) {
+    const bypassCandidates = state.officers.filter(
+      (o) => o.alive && o.id !== officerId && o.rank !== 'captain' && RANK_ORDER[o.rank] > RANK_ORDER[preHatchRank]
+    )
+    if (bypassCandidates.length > 0) {
+      const bypassed = [...bypassCandidates].sort(
+        (a, b) => RANK_ORDER[b.rank] - RANK_ORDER[a.rank] || b.skill - a.skill
+      )[0]
+      const card: CardInstance = {
+        id: `c${state.nextId}`,
+        templateId: 'bypassed-officer',
+        params: { bypassedId: bypassed.id, newCaptainId: officerId },
+      }
+      state.nextId += 1
+      state.pendingCards.push(card)
+    }
   }
 }

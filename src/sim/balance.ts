@@ -142,3 +142,15 @@ export const HATCH_MORALE_BONUS = 10
 // missions.ts — crew equity conversion (non-captain xp + promotion thresholds)
 export const CREW_XP_PER_MISSION = 2
 export const RANK_XP: Record<'ensign' | 'midwingman' | 'lieutenant', number> = { ensign: 15, midwingman: 40, lieutenant: 90 }
+
+// cards.ts — decision card registry
+export const SPONSOR_KIN_GOODWILL = 2       // sponsorship: gratitude patron's relative chosen
+export const SPONSOR_KIN_GOODWILL_NEW = 4   // sponsorship: transactional patron's relative chosen
+export const INSURANCE_MIN_DRAGONS = 2
+export const INSURANCE_MORALE_COST = 20
+export const INSURANCE_DECLINE_MORALE = 5
+export const BYPASS_CONSOLE_COST = 10
+export const BYPASS_CONSOLE_MORALE = 5
+export const BYPASS_MORALE_COST = 15
+export const TRIBUTE_DEMAND_INTERVAL_DAYS = 60
+export const TRAP_WARNING_CHANCE = 0.15

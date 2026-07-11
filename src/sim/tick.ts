@@ -21,6 +21,7 @@ import { tickMissions } from './missions'
 import { tickAuction } from './auction'
 import { tickPatrons } from './patrons'
 import { tickWar } from './war'
+import { tickCards } from './cards'
 
 /**
  * Advances the simulation by one tick, mutating `state` in place.
@@ -45,6 +46,7 @@ export function tick(state: GameState): void {
   tickAuction(state, rng)
   tickPatrons(state, rng)
   tickWar(state, rng)
+  tickCards(state, rng)
 
   if (state.day !== previousDay) {
     runDailyUpkeep(state, rng)
