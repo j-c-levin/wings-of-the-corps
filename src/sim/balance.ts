@@ -95,3 +95,25 @@ export const XP_PER_MISSION = 10
 export const SKILL_GROWTH_CHANCE = 0.3
 export const SKILL_MAX = 10
 export const DONE_MISSION_CAP = 8
+
+// patrons.ts
+export const TIER_MIN = -3
+export const TIER_MAX = 3
+export const GOODWILL_CAP = 10
+export const GIFT_TIER_MIN = 2
+export const GIFT_CHANCE = 0.04
+export const GIFT_COIN = 25
+export const GIFT_GOODWILL = 2
+export const RIVAL_SABOTAGE_TIER = -1
+export const TRAP_CHANCE = 0.03
+export const TRAP_ENEMY_MIN = 6
+export const TRAP_ENEMY_MAX = 9
+export const TRAP_REWARD_MULT = 1.5
+
+// actions.ts
+export const TREASURE_CONTENTMENT = 15
+export const TRIBUTE_COST = 30
+export const TRIBUTE_GOODWILL = 2
+export const FEED_PRICE = 2
+export const AUCTION_GOODWILL_COST = 2
+export const AUCTION_BUMP = 3

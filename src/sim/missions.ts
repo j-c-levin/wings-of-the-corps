@@ -2,6 +2,7 @@ import type { Dragon, GameState, Id, Mission, MissionKind } from './types'
 import type { Rng } from './rng'
 import { successChance } from './projection'
 import { addLog } from './tick'
+import { adjustTier, earnGoodwill } from './patrons'
 import { LOG_LINES, MISSION_NAMES } from './content'
 import {
   TICKS_PER_DAY,
@@ -263,12 +264,8 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     crewLost = sev >= 2 ? rng.int(0, CREW_LOST_SUCCESS_MAX) : 0
 
     if (m.patronId) {
-      const patron = state.patrons.find((p) => p.id === m.patronId)
-      if (patron) {
-        patron.goodwill = Math.min(10, patron.goodwill + PATRON_SUCCESS_GOODWILL)
-        patron.tier = Math.min(3, patron.tier + 1)
-        patron.memory = `Remembers: the ${m.name} flown well.`
-      }
+      earnGoodwill(state, m.patronId, PATRON_SUCCESS_GOODWILL)
+      adjustTier(state, m.patronId, 1, `Remembers: the ${m.name} flown well.`)
     }
 
     narrativeParts.push(`${m.name} succeeds.`)
@@ -279,11 +276,7 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     state.standing = Math.max(0, state.standing - FAIL_STANDING_COST * sev)
 
     if (m.patronId) {
-      const patron = state.patrons.find((p) => p.id === m.patronId)
-      if (patron) {
-        patron.tier = Math.max(-3, patron.tier - 1)
-        patron.memory = `Your failure at ${m.name} has not gone unnoticed.`
-      }
+      adjustTier(state, m.patronId, -1, `Your failure at ${m.name} has not gone unnoticed.`)
     }
 
     narrativeParts.push(`${m.name} fails.`)
@@ -331,10 +324,7 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     m.outcome.narrative += ' A promise broken.'
     addLog(state, `${m.name}: a promise broken — delivered too late to matter.`)
     if (m.patronId) {
-      const patron = state.patrons.find((p) => p.id === m.patronId)
-      if (patron) {
-        patron.memory = `Remembers: your promise on the ${m.name}, broken.`
-      }
+      adjustTier(state, m.patronId, 0, `Remembers: your promise on the ${m.name}, broken.`)
     }
   }
 
