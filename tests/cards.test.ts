@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { newRun } from '../src/sim/newRun'
 import { tick } from '../src/sim/tick'
 import { createRng } from '../src/sim/rng'
-import { chooseCardOption, auctionSpendGoodwill } from '../src/sim/actions'
+import { chooseCardOption, auctionSpendGoodwill, declineMission } from '../src/sim/actions'
 import { CARDS, tickCards } from '../src/sim/cards'
-import { hatchEgg, auctionClaim } from '../src/sim/auction'
+import { hatchEgg, auctionClaim, startAuction } from '../src/sim/auction'
 import {
   TICKS_PER_DAY,
   SPONSOR_KIN_GOODWILL,
@@ -212,6 +212,26 @@ describe('insurance-officer card', () => {
     expect(officer.morale).toBe(moraleBefore - INSURANCE_MORALE_COST)
   })
 
+  it('does not fire while an auction is live; fires once the auction resolves', () => {
+    const state = twoDragonState(30)
+    state.officers[1].rank = 'lieutenant' // insurance-eligible from here on
+    state.tickCount = TICKS_PER_DAY
+    state.day = 1
+
+    // A live auction suppresses the trigger entirely.
+    startAuction(state, createRng(1), ['grey-copper'], state.officers[4].id)
+    tickCards(state, createRng(1))
+    expect(state.pendingCards).toHaveLength(0)
+    expect(state.flags['insurance-offered']).toBeUndefined()
+
+    // Once the auction resolves, the same trigger fires on the next day boundary.
+    state.auction = null
+    state.tickCount = TICKS_PER_DAY * 2
+    state.day = 2
+    tickCards(state, createRng(1))
+    expect(state.pendingCards.some((c) => c.templateId === 'insurance-officer')).toBe(true)
+  })
+
   it('"let them fly" gives a morale bonus and sets no flag', () => {
     const state = twoDragonState(8)
     state.officers[1].rank = 'lieutenant'
@@ -358,6 +378,26 @@ describe('tribute-demand card', () => {
     chooseCardOption(state, card.id, 1)
     expect(transactional.tier).toBe(0)
   })
+
+  it('drops the stale tribute-done marker when the next demand fires', () => {
+    const state = newRun(22)
+    state.pendingCards = []
+    const transactional = state.patrons.find((p) => p.kind === 'transactional')!
+    transactional.tier = 1
+
+    state.day = TRIBUTE_DEMAND_INTERVAL_DAYS
+    state.tickCount = TRIBUTE_DEMAND_INTERVAL_DAYS * TICKS_PER_DAY
+    tickCards(state, createRng(1))
+    expect(state.flags[`tribute-done-${TRIBUTE_DEMAND_INTERVAL_DAYS}`]).toBe(true)
+    chooseCardOption(state, state.pendingCards[0].id, 1)
+
+    state.day = TRIBUTE_DEMAND_INTERVAL_DAYS * 2
+    state.tickCount = TRIBUTE_DEMAND_INTERVAL_DAYS * 2 * TICKS_PER_DAY
+    transactional.tier = 1 // refuse dropped it; re-warm to re-arm the cadence
+    tickCards(state, createRng(1))
+    expect(state.flags[`tribute-done-${TRIBUTE_DEMAND_INTERVAL_DAYS * 2}`]).toBe(true)
+    expect(state.flags[`tribute-done-${TRIBUTE_DEMAND_INTERVAL_DAYS}`]).toBeUndefined()
+  })
 })
 
 describe('trap-warning card', () => {
@@ -446,6 +486,24 @@ describe('trap-warning card', () => {
 
     expect(state.missions.find((m) => m.id === mission.id)).toBeUndefined()
     expect(state.flags[`trap:${mission.id}`]).toBeUndefined()
+    expect(state.flags[`warned:${mission.id}`]).toBeUndefined()
+    // The log names the actual rival patron, not a hardcoded string.
+    const rival = state.patrons.find((p) => p.kind === 'rival')!
+    const line = state.log[state.log.length - 1]
+    expect(line.text).toContain(rival.name)
+  })
+
+  it('declining a warned trap mission directly also cleans up the warned flag', () => {
+    const state = newRun(24)
+    state.pendingCards = []
+    const mission = missionWithTrap(state)
+    state.flags[`warned:${mission.id}`] = true // as if the warning card had fired
+
+    declineMission(state, mission.id)
+
+    expect(state.missions.find((m) => m.id === mission.id)).toBeUndefined()
+    expect(state.flags[`trap:${mission.id}`]).toBeUndefined()
+    expect(state.flags[`warned:${mission.id}`]).toBeUndefined()
   })
 })
 

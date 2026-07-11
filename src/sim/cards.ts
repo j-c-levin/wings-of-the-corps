@@ -273,11 +273,13 @@ const trapWarning: CardTemplate = {
         enabled: true,
         apply(state) {
           const mission = state.missions.find((m) => m.id === missionId)
+          const rival = rivalPatron(state)
           state.missions = state.missions.filter((m) => m.id !== missionId)
           delete state.flags[`trap:${missionId}`]
+          delete state.flags[`warned:${missionId}`]
           addLog(
             state,
-            `A quiet word, and you decline ${mission ? mission.name : 'the offer'} — Rankin's generosity along with it.`
+            `A quiet word, and you decline ${mission ? mission.name : 'the offer'} — ${rival ? rival.name : 'your rival'}'s generosity along with it.`
           )
         },
       },
@@ -357,6 +359,11 @@ function tryTribute(state: GameState): boolean {
   const doneFlag = `tribute-done-${state.day}`
   if (state.flags[doneFlag]) return false
 
+  // Track only the latest cadence marker — drop stale ones so flags don't
+  // grow (same idiom as the offers-day and auction retry markers).
+  for (const key of Object.keys(state.flags)) {
+    if (key.startsWith('tribute-done-')) delete state.flags[key]
+  }
   state.flags[doneFlag] = true
   pushCard(state, 'tribute-demand', { patronId: transactional.id })
   return true
@@ -380,12 +387,15 @@ function tryTrapWarning(state: GameState, rng: Rng): boolean {
 /**
  * Day-boundary scripted-content scheduler. Never stacks: if a card is
  * already pending — from this function or anywhere else (hatchEgg's
- * bypassed-officer, the auction's hatching card) — it does nothing. Checks
- * triggers in a fixed priority order and pushes at most one card per day.
+ * bypassed-officer, the auction's hatching card) — it does nothing, and it
+ * stays silent while an auction is live (same precedent as patrons.ts's
+ * canInjectTrap: no new demands mid-auction). Checks triggers in a fixed
+ * priority order and pushes at most one card per day.
  */
 export function tickCards(state: GameState, rng: Rng): void {
   if (state.tickCount % TICKS_PER_DAY !== 0) return
   if (state.pendingCards.length > 0) return
+  if (state.auction !== null) return
   if (state.status !== 'running') return
 
   if (tryInsurance(state)) return

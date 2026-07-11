@@ -80,6 +80,7 @@ export function tickMissions(state: GameState, rng: Rng): void {
       if (m.status === 'offered' && state.day > m.offerExpiresDay) {
         expiredIds.push(m.id)
         delete state.flags[`trap:${m.id}`] // expired trap offers must not leak their flag
+        delete state.flags[`warned:${m.id}`] // nor the trap-warning's one-shot marker
         if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
           state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
           addLog(state, `The ${m.name} offer lapses unanswered — the Admiralty notices the refusal.`)
@@ -109,6 +110,7 @@ export function departMission(state: GameState, m: Mission, d: Dragon): void {
   d.status = 'mission'
   d.missionId = m.id
   delete state.flags[`trap:${m.id}`]
+  delete state.flags[`warned:${m.id}`]
 }
 
 /**

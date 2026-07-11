@@ -44,6 +44,7 @@ export function declineMission(state: GameState, missionId: Id): void {
   const isTrap = state.flags[trapFlag] === true
 
   state.missions = state.missions.filter((m) => m.id !== missionId)
+  delete state.flags[`warned:${missionId}`] // trap-warning's one-shot marker leaves with the mission
 
   if (isTrap) {
     delete state.flags[trapFlag]
