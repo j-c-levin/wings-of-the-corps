@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { game, setSpeed, startLoop, type Speed } from './store.svelte'
+  import AuctionScene from './AuctionScene.svelte'
   import CardOverlay from './CardOverlay.svelte'
   import CovertTab from './CovertTab.svelte'
   import EndScreen from './EndScreen.svelte'
@@ -57,36 +58,31 @@
     </div>
   </header>
 
-  <main class="main">
-    {#if auctionLive}
-      <div class="auction-placeholder">
-        <p>The allocation is under way — auction scene lands in Task 12.</p>
-        <ul>
-          {#each game.state.auction!.bidders as bidder (bidder.name)}
-            <li class:you={bidder.you}>{bidder.name} — influence {bidder.influence}{bidder.you ? ' (you)' : ''}</li>
-          {/each}
-        </ul>
-      </div>
-    {:else if game.tab === 'covert'}
-      <CovertTab />
-    {:else if game.tab === 'missions'}
-      <MissionsTab />
-    {:else if game.tab === 'roster'}
-      <RosterTab />
-    {:else}
-      <PeopleTab />
-    {/if}
-  </main>
+  {#if auctionLive}
+    <AuctionScene />
+  {:else}
+    <main class="main">
+      {#if game.tab === 'covert'}
+        <CovertTab />
+      {:else if game.tab === 'missions'}
+        <MissionsTab />
+      {:else if game.tab === 'roster'}
+        <RosterTab />
+      {:else}
+        <PeopleTab />
+      {/if}
+    </main>
 
-  <footer class="tabs">
-    <button class:active={game.tab === 'covert'} onclick={() => tabClick('covert')}>Covert</button>
-    <button class:active={game.tab === 'missions'} onclick={() => tabClick('missions')}>
-      Missions
-      {#if missionsBadge}<span class="badge"></span>{/if}
-    </button>
-    <button class:active={game.tab === 'roster'} onclick={() => tabClick('roster')}>Roster</button>
-    <button class:active={game.tab === 'people'} onclick={() => tabClick('people')}>People</button>
-  </footer>
+    <footer class="tabs">
+      <button class:active={game.tab === 'covert'} onclick={() => tabClick('covert')}>Covert</button>
+      <button class:active={game.tab === 'missions'} onclick={() => tabClick('missions')}>
+        Missions
+        {#if missionsBadge}<span class="badge"></span>{/if}
+      </button>
+      <button class:active={game.tab === 'roster'} onclick={() => tabClick('roster')}>Roster</button>
+      <button class:active={game.tab === 'people'} onclick={() => tabClick('people')}>People</button>
+    </footer>
+  {/if}
 </div>
 
 {#if ended}
@@ -180,21 +176,6 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.8rem;
-  }
-
-  .auction-placeholder ul {
-    list-style: none;
-    padding: 0;
-  }
-
-  .auction-placeholder li {
-    padding: 0.4rem 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .auction-placeholder li.you {
-    color: var(--accent);
-    font-weight: 600;
   }
 
   .tabs {
