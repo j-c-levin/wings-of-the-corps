@@ -1,5 +1,350 @@
-import type { GameState } from './types'
+import type { Dragon, GameState, Id, Mission, MissionKind } from './types'
 import type { Rng } from './rng'
+import { successChance } from './projection'
+import { addLog } from './tick'
+import { LOG_LINES, MISSION_NAMES } from './content'
+import {
+  TICKS_PER_DAY,
+  REFUSAL_WAR_HEAT_GATE,
+  REFUSAL_STANDING_COST,
+  OFFER_INTERVAL_DAYS,
+  MAX_OPEN_OFFERS,
+  OFFER_WINDOW_DAYS,
+  DEADLINE_SLACK_DAYS,
+  DISPATCH_DURATION_MIN_DAYS,
+  DISPATCH_DURATION_MAX_DAYS,
+  COMBAT_DURATION_MIN_DAYS,
+  COMBAT_DURATION_MAX_DAYS,
+  FORMATION_DURATION_MIN_DAYS,
+  FORMATION_DURATION_MAX_DAYS,
+  ENEMY_STRENGTH_SEV1_MIN,
+  ENEMY_STRENGTH_SEV1_MAX,
+  ENEMY_STRENGTH_SEV2_MIN,
+  ENEMY_STRENGTH_SEV2_MAX,
+  ENEMY_STRENGTH_SEV3_MIN,
+  ENEMY_STRENGTH_SEV3_MAX,
+  COIN_REWARD_BASE,
+  COIN_REWARD_PER_ENEMY,
+  TREASURE_REWARD,
+  STANDING_REWARD_BASE,
+  PATRON_MISSION_STANDING_BONUS,
+  PATRON_MISSION_CHANCE,
+  LIGHT_WOUND_MAX,
+  CREW_LOST_SUCCESS_MAX,
+  FAIL_WOUND_MIN,
+  FAIL_WOUND_MAX,
+  FAIL_LASTING_MAX,
+  FAIL_STANDING_COST,
+  CREW_LOST_FAIL_SEV1_MIN,
+  CREW_LOST_FAIL_SEV1_MAX,
+  CREW_LOST_FAIL_SEV2_MIN,
+  CREW_LOST_FAIL_SEV2_MAX,
+  CREW_LOST_FAIL_SEV3_MIN,
+  CREW_LOST_FAIL_SEV3_MAX,
+  OFFICER_DEATH_CHANCE,
+  DRAGON_LOSS_CHANCE,
+  CAPTAIN_MORALE_LOSS_ON_DRAGON_DEATH,
+  LATE_STANDING_COST,
+  PATRON_SUCCESS_GOODWILL,
+  XP_PER_MISSION,
+  SKILL_GROWTH_CHANCE,
+  SKILL_MAX,
+  DONE_MISSION_CAP,
+} from './balance'
 
-/** Stub — Task 4 (missions + projection) fills this in. */
-export function tickMissions(_state: GameState, _rng: Rng): void {}
+type OfferableKind = Exclude<MissionKind, 'war'>
+
+/**
+ * Advances mission state by one tick:
+ *  (a) resolves any active mission whose returnTick has arrived — every tick.
+ *  (b) on the tick that rolls the day over: expires offers past their
+ *      offerExpiresDay (late-game refusal cost above REFUSAL_WAR_HEAT_GATE),
+ *      then calls generateOffers.
+ */
+export function tickMissions(state: GameState, rng: Rng): void {
+  for (const m of state.missions) {
+    if (m.status === 'active' && m.returnTick !== null && m.returnTick <= state.tickCount) {
+      resolveMission(state, m, rng)
+    }
+  }
+
+  // state.day is already advanced to the post-rollover value by tick.ts
+  // before subsystems run, so a day-boundary tick is exactly one where
+  // tickCount is a multiple of TICKS_PER_DAY.
+  if (state.tickCount % TICKS_PER_DAY === 0) {
+    const expiredIds: Id[] = []
+    for (const m of state.missions) {
+      if (m.status === 'offered' && state.day > m.offerExpiresDay) {
+        expiredIds.push(m.id)
+        if (state.warHeat > REFUSAL_WAR_HEAT_GATE) {
+          state.standing = Math.max(0, state.standing - REFUSAL_STANDING_COST)
+          addLog(state, `The ${m.name} offer lapses unanswered — the Admiralty notices the refusal.`)
+        }
+      }
+    }
+    if (expiredIds.length > 0) {
+      const removeSet = new Set(expiredIds)
+      state.missions = state.missions.filter((m) => !removeSet.has(m.id))
+    }
+
+    generateOffers(state, rng)
+  }
+}
+
+/** Sends a dragon out on an offered mission. No validation — callers (actions) validate. */
+export function departMission(state: GameState, m: Mission, d: Dragon): void {
+  m.status = 'active'
+  m.assignedDragonId = d.id
+  m.returnTick = state.tickCount + m.durationTicks
+  d.status = 'mission'
+  d.missionId = m.id
+}
+
+/**
+ * Generates new mission offers on a fixed cadence. A no-op while a
+ * decision card is pending or the auction is running — the FTUE
+ * determinism gate — so nothing new can appear mid-scripted-sequence.
+ */
+export function generateOffers(state: GameState, rng: Rng): void {
+  if (state.pendingCards.length > 0 || state.auction !== null) return
+  if (state.day % OFFER_INTERVAL_DAYS !== 0) return
+
+  const dayFlag = `offers-day-${state.day}`
+  if (state.flags[dayFlag]) return
+  state.flags[dayFlag] = true
+
+  let toGenerate = rng.int(1, 2)
+  while (toGenerate > 0) {
+    const openOffers = state.missions.filter((m) => m.status === 'offered').length
+    if (openOffers >= MAX_OPEN_OFFERS) break
+    state.missions.push(buildMissionOffer(state, rng))
+    toGenerate -= 1
+  }
+}
+
+function pickKindAndSeverity(state: GameState, rng: Rng): { kind: OfferableKind; severity: 1 | 2 | 3 } {
+  if (state.rung === 1) {
+    return { kind: 'dispatch', severity: 1 }
+  }
+  if (state.rung === 2) {
+    const kind = rng.pick<OfferableKind>(['dispatch', 'combat'])
+    const severity = rng.int(1, 2) as 1 | 2
+    return { kind, severity }
+  }
+  // rung 3+: also formation, at severity 2-3
+  const kind = rng.pick<OfferableKind>(['dispatch', 'combat', 'formation'])
+  const severity = kind === 'formation' ? (rng.int(2, 3) as 2 | 3) : (rng.int(1, 2) as 1 | 2)
+  return { kind, severity }
+}
+
+function enemyStrengthRange(sev: 1 | 2 | 3): [number, number] {
+  if (sev === 1) return [ENEMY_STRENGTH_SEV1_MIN, ENEMY_STRENGTH_SEV1_MAX]
+  if (sev === 2) return [ENEMY_STRENGTH_SEV2_MIN, ENEMY_STRENGTH_SEV2_MAX]
+  return [ENEMY_STRENGTH_SEV3_MIN, ENEMY_STRENGTH_SEV3_MAX]
+}
+
+function durationDayRange(kind: OfferableKind): [number, number] {
+  if (kind === 'dispatch') return [DISPATCH_DURATION_MIN_DAYS, DISPATCH_DURATION_MAX_DAYS]
+  if (kind === 'combat') return [COMBAT_DURATION_MIN_DAYS, COMBAT_DURATION_MAX_DAYS]
+  return [FORMATION_DURATION_MIN_DAYS, FORMATION_DURATION_MAX_DAYS]
+}
+
+function pickUniqueName(state: GameState, rng: Rng, kind: OfferableKind): string {
+  const pool = MISSION_NAMES[kind]
+  const base = rng.pick(pool)
+  const existingNames = new Set(state.missions.map((m) => m.name))
+  if (!existingNames.has(base)) return base
+  let n = 2
+  while (existingNames.has(`${base} ${n}`)) n += 1
+  return `${base} ${n}`
+}
+
+function pickPatronForMission(state: GameState, rng: Rng): Id | null {
+  if (rng.next() >= PATRON_MISSION_CHANCE) return null
+  const eligible = state.patrons.filter((p) => p.kind !== 'rival' && p.tier >= 0)
+  if (eligible.length === 0) return null
+  return rng.pick(eligible).id
+}
+
+function buildMissionOffer(state: GameState, rng: Rng): Mission {
+  const { kind, severity } = pickKindAndSeverity(state, rng)
+  const [enemyMin, enemyMax] = enemyStrengthRange(severity)
+  const enemyStrength = rng.int(enemyMin, enemyMax)
+  const weather = Math.round(rng.next() * 100) / 100
+
+  const [durMin, durMax] = durationDayRange(kind)
+  const durationDays = rng.int(durMin, durMax)
+  const durationTicks = durationDays * TICKS_PER_DAY
+
+  const offerExpiresDay = state.day + OFFER_WINDOW_DAYS
+  const deadlineDay = state.day + durationDays + DEADLINE_SLACK_DAYS
+
+  const patronId = pickPatronForMission(state, rng)
+  const rewardCoin = COIN_REWARD_BASE * severity + COIN_REWARD_PER_ENEMY * enemyStrength
+  const rewardTreasure = severity >= 2 ? TREASURE_REWARD * (severity - 1) : 0
+  const rewardStanding = STANDING_REWARD_BASE * severity + (patronId ? PATRON_MISSION_STANDING_BONUS : 0)
+
+  const name = pickUniqueName(state, rng, kind)
+  const id = `m${state.nextId}`
+  state.nextId += 1
+
+  return {
+    id,
+    name,
+    kind,
+    severityTier: severity,
+    rewardCoin,
+    rewardTreasure,
+    rewardStanding,
+    patronId,
+    offerExpiresDay,
+    deadlineDay,
+    durationTicks,
+    enemyStrength,
+    weather,
+    status: 'offered',
+    assignedDragonId: null,
+    returnTick: null,
+    outcome: null,
+  }
+}
+
+function crewLostForFailure(sev: 1 | 2 | 3, rng: Rng): number {
+  if (sev === 1) return rng.int(CREW_LOST_FAIL_SEV1_MIN, CREW_LOST_FAIL_SEV1_MAX)
+  if (sev === 2) return rng.int(CREW_LOST_FAIL_SEV2_MIN, CREW_LOST_FAIL_SEV2_MAX)
+  return rng.int(CREW_LOST_FAIL_SEV3_MIN, CREW_LOST_FAIL_SEV3_MAX)
+}
+
+/**
+ * Resolves an active mission: rolls against successChance() — THE SAME
+ * function the offer's risk read used — then applies graduated-severity
+ * outcomes. Severity gating is strict: tier 1 can never kill an officer
+ * or lose a dragon; tier 2 failure can kill the assigned dragon's captain
+ * (cascading to the dragon, unless an insurance flag absorbs it); tier 3
+ * failure can lose the dragon outright while the captain survives.
+ */
+export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
+  const d = state.dragons.find((x) => x.id === m.assignedDragonId)
+  if (!d) {
+    m.status = 'done'
+    m.outcome = {
+      success: false,
+      woundsTemp: 0,
+      woundsLasting: 0,
+      crewLost: 0,
+      officerLostId: null,
+      dragonLost: false,
+      narrative: `${m.name}: the assigned dragon could not be found; the mission is written off.`,
+    }
+    pruneDoneMissions(state)
+    return
+  }
+
+  const captain = state.officers.find((o) => o.id === d.captainId) ?? null
+  const chance = successChance(state, m, d)
+  const success = rng.next() < chance
+  const sev = m.severityTier
+
+  let officerLostId: Id | null = null
+  let dragonLost = false
+  const narrativeParts: string[] = []
+  let crewLost: number
+
+  if (success) {
+    state.coin += m.rewardCoin
+    state.treasure += m.rewardTreasure
+    state.standing = Math.min(100, state.standing + m.rewardStanding)
+
+    d.woundsTemp = Math.min(100, d.woundsTemp + rng.int(0, LIGHT_WOUND_MAX))
+    crewLost = sev >= 2 ? rng.int(0, CREW_LOST_SUCCESS_MAX) : 0
+
+    if (m.patronId) {
+      const patron = state.patrons.find((p) => p.id === m.patronId)
+      if (patron) {
+        patron.goodwill = Math.min(10, patron.goodwill + PATRON_SUCCESS_GOODWILL)
+      }
+    }
+
+    narrativeParts.push(`${m.name} succeeds.`)
+  } else {
+    d.woundsTemp = Math.min(100, d.woundsTemp + rng.int(FAIL_WOUND_MIN, FAIL_WOUND_MAX))
+    d.woundsLasting = Math.min(30, d.woundsLasting + rng.int(0, FAIL_LASTING_MAX))
+    crewLost = crewLostForFailure(sev, rng)
+    state.standing = Math.max(0, state.standing - FAIL_STANDING_COST * sev)
+
+    if (m.patronId) {
+      const patron = state.patrons.find((p) => p.id === m.patronId)
+      if (patron) {
+        patron.tier = Math.max(-3, patron.tier - 1)
+        patron.memory = `Your failure at ${m.name} has not gone unnoticed.`
+      }
+    }
+
+    narrativeParts.push(`${m.name} fails.`)
+
+    if (sev === 2 && captain && rng.next() < OFFICER_DEATH_CHANCE) {
+      const insuranceFlag = `insurance:${d.id}`
+      if (state.flags[insuranceFlag] === true) {
+        state.flags[insuranceFlag] = false
+        narrativeParts.push(`${captain.name} nearly falls, but a waiting insurance officer steps in and ${d.name} survives.`)
+        addLog(state, `An unnamed officer throws himself into the breach — ${d.name} survives where ${captain.name} could not have.`)
+      } else {
+        captain.alive = false
+        officerLostId = captain.id
+        dragonLost = true
+        state.dragons = state.dragons.filter((x) => x.id !== d.id)
+        narrativeParts.push(`Captain ${captain.name} is killed, and ${d.name} is lost with him.`)
+        addLog(state, rng.pick(LOG_LINES.funeral))
+      }
+    } else if (sev === 3 && rng.next() < DRAGON_LOSS_CHANCE) {
+      dragonLost = true
+      state.dragons = state.dragons.filter((x) => x.id !== d.id)
+      if (captain) {
+        captain.morale = Math.max(0, captain.morale - CAPTAIN_MORALE_LOSS_ON_DRAGON_DEATH)
+      }
+      narrativeParts.push(`${d.name} is lost outright${captain ? `; ${captain.name} survives, grieving` : ''}.`)
+      addLog(state, rng.pick(LOG_LINES.funeral))
+    }
+  }
+
+  m.outcome = {
+    success,
+    woundsTemp: d.woundsTemp,
+    woundsLasting: d.woundsLasting,
+    crewLost,
+    officerLostId,
+    dragonLost,
+    narrative: narrativeParts.join(' '),
+  }
+
+  if (state.tickCount > m.deadlineDay * TICKS_PER_DAY) {
+    state.standing = Math.max(0, state.standing - LATE_STANDING_COST)
+    m.outcome.narrative += ' A promise broken.'
+    addLog(state, `${m.name}: a promise broken — delivered too late to matter.`)
+  }
+
+  if (captain && captain.alive) {
+    captain.xp += XP_PER_MISSION * sev
+    if (rng.next() < SKILL_GROWTH_CHANCE) {
+      captain.skill = Math.min(SKILL_MAX, captain.skill + 1)
+    }
+  }
+
+  m.status = 'done'
+  if (!dragonLost) {
+    d.status = 'home'
+    d.missionId = null
+  }
+
+  pruneDoneMissions(state)
+}
+
+/** Keeps at most DONE_MISSION_CAP done missions, dropping the oldest by returnTick. */
+function pruneDoneMissions(state: GameState): void {
+  const done = state.missions.filter((m) => m.status === 'done')
+  if (done.length <= DONE_MISSION_CAP) return
+
+  done.sort((a, b) => (a.returnTick ?? 0) - (b.returnTick ?? 0))
+  const toRemove = new Set(done.slice(0, done.length - DONE_MISSION_CAP).map((m) => m.id))
+  state.missions = state.missions.filter((m) => !toRemove.has(m.id))
+}

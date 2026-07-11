@@ -34,3 +34,64 @@ export const CANDIDATE_SKILL_RELATIVE = 4
 export const RELATIVE_NERVE_RANGE: readonly [number, number] = [4, 6]
 export const JUNIOR_SKILL_RANGE: readonly [number, number] = [1, 3]
 export const JUNIOR_NERVE_RANGE: readonly [number, number] = [2, 5]
+
+// projection.ts — dragonPower / successChance / riskLabel / availabilityForecast
+export const CONTENTMENT_FACTOR_BASE = 0.7
+export const CONTENTMENT_FACTOR_SCALE = 0.6
+export const CAPTAIN_FACTOR_BASE = 0.75
+export const CAPTAIN_SKILL_WEIGHT = 0.04
+export const CAPTAIN_NERVE_WEIGHT = 0.01
+export const DRAGON_POWER_MIN = 0.1
+export const RISK_SAFE = 0.85
+export const RISK_RISKY = 0.65
+export const RISK_DANGEROUS = 0.4
+export const AVG_WOUND_ESTIMATE = 20
+
+// missions.ts — offer generation
+export const REFUSAL_WAR_HEAT_GATE = 50
+export const REFUSAL_STANDING_COST = 2
+export const OFFER_INTERVAL_DAYS = 3
+export const MAX_OPEN_OFFERS = 3
+export const OFFER_WINDOW_DAYS = 4
+export const DEADLINE_SLACK_DAYS = 3
+export const DISPATCH_DURATION_MIN_DAYS = 2
+export const DISPATCH_DURATION_MAX_DAYS = 4
+export const COMBAT_DURATION_MIN_DAYS = 3
+export const COMBAT_DURATION_MAX_DAYS = 5
+export const FORMATION_DURATION_MIN_DAYS = 4
+export const FORMATION_DURATION_MAX_DAYS = 7
+export const ENEMY_STRENGTH_SEV1_MIN = 0
+export const ENEMY_STRENGTH_SEV1_MAX = 3
+export const ENEMY_STRENGTH_SEV2_MIN = 3
+export const ENEMY_STRENGTH_SEV2_MAX = 6
+export const ENEMY_STRENGTH_SEV3_MIN = 5
+export const ENEMY_STRENGTH_SEV3_MAX = 9
+export const COIN_REWARD_BASE = 10
+export const COIN_REWARD_PER_ENEMY = 2
+export const TREASURE_REWARD = 5
+export const STANDING_REWARD_BASE = 3
+export const PATRON_MISSION_STANDING_BONUS = 2
+export const PATRON_MISSION_CHANCE = 0.3
+
+// missions.ts — resolution
+export const LIGHT_WOUND_MAX = 10
+export const CREW_LOST_SUCCESS_MAX = 2
+export const FAIL_WOUND_MIN = 15
+export const FAIL_WOUND_MAX = 45
+export const FAIL_LASTING_MAX = 5
+export const FAIL_STANDING_COST = 2
+export const CREW_LOST_FAIL_SEV1_MIN = 0
+export const CREW_LOST_FAIL_SEV1_MAX = 2
+export const CREW_LOST_FAIL_SEV2_MIN = 1
+export const CREW_LOST_FAIL_SEV2_MAX = 4
+export const CREW_LOST_FAIL_SEV3_MIN = 2
+export const CREW_LOST_FAIL_SEV3_MAX = 6
+export const OFFICER_DEATH_CHANCE = 0.25
+export const DRAGON_LOSS_CHANCE = 0.35
+export const CAPTAIN_MORALE_LOSS_ON_DRAGON_DEATH = 30
+export const LATE_STANDING_COST = 3
+export const PATRON_SUCCESS_GOODWILL = 1
+export const XP_PER_MISSION = 10
+export const SKILL_GROWTH_CHANCE = 0.3
+export const SKILL_MAX = 10
+export const DONE_MISSION_CAP = 8
