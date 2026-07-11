@@ -97,11 +97,11 @@ describe('first-auction FTUE guarantee', () => {
   })
 
   it('an EARLY goodwill spend (before any rival has claimed) still only ever secures the winchester (10 seeds)', () => {
-    // Regression: spending goodwill immediately makes you the top bidder
-    // right away. Rivals must still settle yellow-reaper and grey-copper
-    // between themselves before your candidate can claim anything — the
-    // "last pick, always a tiny messenger dragon" promise must hold
-    // regardless of when the spend happens, not just when it happens late.
+    // The honest-ladder maths: a single spend lifts you past the back-markers
+    // only — the two front-runners stay above you and settle yellow-reaper
+    // and grey-copper in the open before your candidate tops the list. The
+    // "one free spend gets the messenger dragon" promise holds regardless of
+    // when the spend happens, with no scripted claim override.
     for (const seed of SEEDS) {
       const state = newRun(seed)
       state.pendingCards = []
@@ -139,6 +139,52 @@ describe('first-auction FTUE guarantee', () => {
       expect(state.auction?.concluded).toBe(true)
       expect(state.auction?.wonBreed).toBe('winchester')
     }
+  })
+})
+
+describe('honest ladder maths', () => {
+  it('ONE goodwill spend ranks you exactly third of six — two front-runners stay strictly above (10 seeds)', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+      const state = newRun(seed)
+      state.pendingCards = []
+      startScriptedFirst(state, state.officers[0].id)
+      const patron = state.patrons.find((p) => p.goodwill >= AUCTION_GOODWILL_COST)!
+
+      auctionSpendGoodwill(state, patron.id)
+      tick(state) // one live tick sorts the ladder
+
+      const a = state.auction!
+      const you = a.bidders.find((b) => b.you)!
+      expect(a.bidders.indexOf(you)).toBe(2)
+      expect(a.bidders.filter((b) => !b.you && b.influence > you.influence)).toHaveLength(2)
+    }
+  })
+
+  it('a SECOND spend honestly outbids the front-runners: the best egg can be claimed', () => {
+    const state = newRun(1)
+    state.pendingCards = []
+    startScriptedFirst(state, state.officers[0].id)
+    // Lady Allendale starts with 4 goodwill — enough for two spends.
+    const patron = state.patrons.find((p) => p.goodwill >= 2 * AUCTION_GOODWILL_COST)!
+    auctionSpendGoodwill(state, patron.id)
+    auctionSpendGoodwill(state, patron.id)
+
+    let guard = 0
+    while (guard < 30) {
+      tick(state)
+      guard += 1
+      const a = state.auction
+      if (!a || a.concluded) break
+      // Now the top name on the list, honestly: the boundary opens for you.
+      expect(a.bidders[0]?.you).toBe(true)
+      if (a.nextClaimIn <= 0) {
+        auctionClaim(state, 'yellow-reaper')
+        break
+      }
+    }
+
+    expect(state.auction?.concluded).toBe(true)
+    expect(state.auction?.wonBreed).toBe('yellow-reaper')
   })
 })
 

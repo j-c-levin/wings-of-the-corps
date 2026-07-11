@@ -32,6 +32,9 @@ import {
   PATRON_MISSION_STANDING_BONUS,
   PATRON_MISSION_CHANCE,
   LIGHT_WOUND_MAX,
+  SEV1_WOUND_MAX,
+  SEV1_DELAY_MIN_DAYS,
+  SEV1_DELAY_MAX_DAYS,
   CREW_LOST_SUCCESS_MAX,
   FAIL_WOUND_MIN,
   FAIL_WOUND_MAX,
@@ -248,10 +251,11 @@ function crewLostForFailure(sev: 1 | 2 | 3, rng: Rng): number {
 /**
  * Resolves an active mission: rolls against successChance() — THE SAME
  * function the offer's risk read used — then applies graduated-severity
- * outcomes. Severity gating is strict: tier 1 can never kill an officer
- * or lose a dragon; tier 2 failure can kill the assigned dragon's captain
- * (cascading to the dragon, unless an insurance flag absorbs it); tier 3
- * failure can lose the dragon outright while the captain survives.
+ * outcomes. Severity gating is strict: tier 1 can never FAIL at all (a bad
+ * roll delays the return instead — its only stake is time and a bruise);
+ * tier 2 failure can kill the assigned dragon's captain (cascading to the
+ * dragon, unless an insurance flag absorbs it); tier 3 failure can lose the
+ * dragon outright while the captain survives.
  */
 export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
   const d = state.dragons.find((x) => x.id === m.assignedDragonId)
@@ -269,14 +273,37 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     addLog(state, m.outcome.narrative)
     pushCard(state, 'aftermath', { name: m.name, success: 0, narrative: m.outcome.narrative })
     resolveKazilikRun(state, m.id, false)
+    delete state.flags[`delayed:${m.id}`]
     pruneDoneMissions(state)
     return
   }
 
   const captain = state.officers.find((o) => o.id === d.captainId) ?? null
   const chance = successChance(state, m, d)
-  const success = rng.next() < chance
   const sev = m.severityTier
+  let success = rng.next() < chance
+
+  // Severity-1 design ruling: a low-risk mission cannot fail — its only real
+  // stake is time. A failed roll delays the return once (a day or two, and a
+  // bruise at most); a second bad roll on the delayed arrival forces success
+  // rather than looping. The deadline still bites: a delay that lands past
+  // deadlineDay pays the late-promise standing cost below.
+  const delayFlag = `delayed:${m.id}`
+  if (!success && sev === 1) {
+    if (!state.flags[delayFlag]) {
+      state.flags[delayFlag] = true
+      const extraDays = rng.int(SEV1_DELAY_MIN_DAYS, SEV1_DELAY_MAX_DAYS)
+      m.returnTick = state.tickCount + extraDays * TICKS_PER_DAY
+      d.woundsTemp = Math.min(100, d.woundsTemp + rng.int(0, SEV1_WOUND_MAX))
+      addLog(
+        state,
+        `${m.name}: ${d.name} is held up on the route — word comes to expect them in another ${extraDays === 1 ? 'day' : `${extraDays} days`}.`
+      )
+      return
+    }
+    success = true
+  }
+  delete state.flags[delayFlag]
 
   let officerLostId: Id | null = null
   let dragonLost = false
@@ -288,7 +315,7 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     state.treasure += m.rewardTreasure
     state.standing = Math.min(100, state.standing + m.rewardStanding)
 
-    d.woundsTemp = Math.min(100, d.woundsTemp + rng.int(0, LIGHT_WOUND_MAX))
+    d.woundsTemp = Math.min(100, d.woundsTemp + rng.int(0, sev === 1 ? SEV1_WOUND_MAX : LIGHT_WOUND_MAX))
     crewLost = sev >= 2 ? rng.int(0, CREW_LOST_SUCCESS_MAX) : 0
 
     if (m.patronId) {
