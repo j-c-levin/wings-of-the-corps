@@ -16,7 +16,7 @@ export const HEALING_THRESHOLD = 60               // woundsTemp at/above this be
 export const TRAINING_PER_DAY = 0.8               // passive training gain for dragons at home
 export const CONTENTMENT_BASELINE = 50            // daily drift target
 export const WOUNDED_LOG_CHANCE = 0.5             // daily flavor-log odds of 'wounded' context when any dragon is hurt
-export const WAR_HEAT_PER_DAY = 0.28              // ~360 days to finale
+export const WAR_HEAT_PER_DAY = 0.28              // ~300 days to finale once WAR_HEAT_NOISE is folded in
 export const FINALE_HEAT = 100
 // mission maths
 export const BASE_SUCCESS = 0.95
@@ -154,3 +154,30 @@ export const BYPASS_CONSOLE_MORALE = 5
 export const BYPASS_MORALE_COST = 15
 export const TRIBUTE_DEMAND_INTERVAL_DAYS = 60
 export const TRAP_WARNING_CHANCE = 0.15
+
+// war.ts — heat clock, authored finale, kazilik quest, scoring
+export const WAR_HEAT_NOISE = 0.1            // extra daily heat draw, rng.next() * this
+export const WAR_RUMOR_LOW_HEAT = 30
+export const WAR_RUMOR_MID_HEAT = 55
+export const WAR_RUMOR_HIGH_HEAT = 80
+export const WAR_LOG_CHANCE = 0.15           // daily odds of an extra war-flavor log line once heat >= 30
+export const FINALE_LENGTH_DAYS = 20
+export const FINALE_MISSION_INTERVAL_DAYS = 3
+export const FINALE_MISSION_COUNT = 6        // authored war-mission sequence across the finale window
+export const WAR_ENEMY_MIN = 6
+export const WAR_ENEMY_MAX = 10
+export const WAR_MISSION_DURATION_MIN_DAYS = 3
+export const WAR_MISSION_DURATION_MAX_DAYS = 5
+export const WAR_OFFER_WINDOW_DAYS = 3
+export const WAR_DEADLINE_SLACK_DAYS = 2
+export const WAR_REWARD_MULT = 1.5
+export const SCORE_PER_DRAGON_WEIGHT: Record<'courier' | 'light' | 'middle' | 'heavy', number> = {
+  courier: 10,
+  light: 15,
+  middle: 25,
+  heavy: 40,
+}
+export const SCORE_PER_OFFICER = 3
+export const SCORE_PER_PATRON_TIER = 5
+export const KAZILIK_COST = 120
+export const TREASURE_KAZILIK_CONSOLATION = 5

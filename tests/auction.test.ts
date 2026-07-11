@@ -352,9 +352,11 @@ describe('scheduling', () => {
   })
 
   it('a rung-2 auction is winnable on merit — top at a boundary with no goodwill spend (seeded)', () => {
-    // Seed 29 verified by sweep: with top standing and a skill-10 candidate,
+    // Seed 85 verified by sweep: with top standing and a skill-10 candidate,
     // rival jitter lets you lead at a claim boundary without spending goodwill.
-    const state = newRun(29)
+    // (Reswept for Task 8's tickWar, which now draws from the shared rng
+    // stream on every day boundary and so shifts downstream auction jitter.)
+    const state = newRun(85)
     state.pendingCards = []
     state.tickCount = TICKS_PER_DAY
     state.day = 1

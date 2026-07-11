@@ -3,6 +3,7 @@ import type { Rng } from './rng'
 import { addLog } from './tick'
 import { adjustTier, earnGoodwill } from './patrons'
 import { hatchEgg } from './auction'
+import { buildWarMission } from './war'
 import { BREEDS } from './content'
 import {
   TICKS_PER_DAY,
@@ -20,6 +21,7 @@ import {
   TRIBUTE_DEMAND_INTERVAL_DAYS,
   GIFT_TIER_MIN,
   TRAP_WARNING_CHANCE,
+  KAZILIK_COST,
 } from './balance'
 
 /**
@@ -319,6 +321,36 @@ const warRumorHigh: CardTemplate = {
   options: () => noteWellOption('The invasion beacons burn along the coast. There is no pretending otherwise now.'),
 }
 
+/** Task 8's optional finale gamble: pushed once, the day the finale starts. */
+const kazilikQuest: CardTemplate = {
+  title: () => 'An Egg from Istanbul',
+  body: () =>
+    `An agent writes from Istanbul: a Kazilik egg, fire-blooded and half-wild, can be had for ${KAZILIK_COST} coin — if you have the nerve to fund the expedition that fetches it home.`,
+  options(state) {
+    return [
+      {
+        label: `Fund the expedition (${KAZILIK_COST} coin)`,
+        detail: 'A costly gamble, and a dangerous flight to bring the egg home.',
+        enabled: state.coin >= KAZILIK_COST,
+        apply(state, rng) {
+          state.coin -= KAZILIK_COST
+          const mission = buildWarMission(state, rng, 3, 'The Istanbul Run')
+          state.flags[`kazilik-run:${mission.id}`] = true
+          addLog(state, 'You fund the expedition to Istanbul; the agent promises a Kazilik egg, if the flight home succeeds.')
+        },
+      },
+      {
+        label: 'Decline',
+        detail: 'Not every gamble is worth the coin.',
+        enabled: true,
+        apply(state) {
+          addLog(state, 'You decline the Istanbul agent — a Kazilik egg is a gamble for another covert.')
+        },
+      },
+    ]
+  },
+}
+
 export const CARDS: Record<string, CardTemplate> = {
   sponsorship,
   hatching,
@@ -329,6 +361,7 @@ export const CARDS: Record<string, CardTemplate> = {
   'war-rumor-low': warRumorLow,
   'war-rumor-mid': warRumorMid,
   'war-rumor-high': warRumorHigh,
+  'kazilik-quest': kazilikQuest,
 }
 
 function pushCard(state: GameState, templateId: string, params: Record<string, string | number>): void {

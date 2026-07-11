@@ -20,7 +20,7 @@ import type { LogContext } from './content'
 import { tickMissions } from './missions'
 import { tickAuction } from './auction'
 import { tickPatrons } from './patrons'
-import { tickWar } from './war'
+import { tickWar, computeScore } from './war'
 import { tickCards } from './cards'
 
 /**
@@ -56,6 +56,10 @@ export function tick(state: GameState): void {
 }
 
 function runDailyUpkeep(state: GameState, rng: Rng): void {
+  // tickWar (run earlier this same tick) may already have ended the run
+  // (wing-destroyed / survived) — daily upkeep has nothing left to do then.
+  if (state.status !== 'running') return
+
   const dragons = state.dragons
 
   // 1. Feed upkeep.
@@ -115,6 +119,7 @@ function runDailyUpkeep(state: GameState, rng: Rng): void {
   if (state.failStreakDays >= FAIL_DAYS_TO_RELIEVED) {
     state.status = 'ended'
     state.ending = 'relieved'
+    state.score = computeScore(state)
     addLog(state, 'The Admiralty relieves you of command; your covert is given to another.')
   }
 

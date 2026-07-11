@@ -4,6 +4,7 @@ import { successChance } from './projection'
 import { addLog } from './tick'
 import { adjustTier, earnGoodwill } from './patrons'
 import { LOG_LINES, pickUniqueMissionName, nextRank } from './content'
+import { resolveKazilikRun } from './war'
 import {
   TICKS_PER_DAY,
   REFUSAL_WAR_HEAT_GATE,
@@ -245,6 +246,7 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
       dragonLost: false,
       narrative: `${m.name}: the assigned dragon could not be found; the mission is written off.`,
     }
+    resolveKazilikRun(state, m.id, false)
     pruneDoneMissions(state)
     return
   }
@@ -351,6 +353,10 @@ export function resolveMission(state: GameState, m: Mission, rng: Rng): void {
     d.status = 'home'
     d.missionId = null
   }
+
+  // Task 8's Kazilik quest: a no-op unless this mission carries the
+  // kazilik-run:<id> flag set by the card's "fund the expedition" option.
+  resolveKazilikRun(state, m.id, success)
 
   pruneDoneMissions(state)
 }
