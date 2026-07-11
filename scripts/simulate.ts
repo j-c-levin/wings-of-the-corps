@@ -170,6 +170,14 @@ export interface RunResult {
   dragonsAtEnd: number
   finaleStartDay: number | null
   standingAtDay100: number
+  standingAtDay150: number
+  // rung diagnostics
+  auction2Fired: boolean
+  auction2Won: boolean
+  auction3Fired: boolean
+  auction3Won: boolean
+  dragonsAtFinaleStart: number | null
+  rungAtFinaleStart: number | null
 }
 
 const DAY_CAP = 500
@@ -179,12 +187,43 @@ export function runOne(seed: number): RunResult {
   const state = newRun(seed)
   let finaleStartDay: number | null = null
   let standingAtDay100: number | null = null
+  let standingAtDay150: number | null = null
+  let dragonsAtFinaleStart: number | null = null
+  let rungAtFinaleStart: number | null = null
+
+  // Auction diagnostics, observed from OUTSIDE the sim (read-only): rung only
+  // advances on a hatch, so a non-FTUE auction opening at rung 1 is the rung-2
+  // auction and one opening at rung 2 is the rung-3 auction. A win is visible
+  // as that same auction's concluded-with-wonBreed incubation phase.
+  let currentAuction: 'ftue' | 'a2' | 'a3' | null = null
+  let auction2Fired = false
+  let auction2Won = false
+  let auction3Fired = false
+  let auction3Won = false
 
   while (state.status === 'running' && state.day <= DAY_CAP) {
     botAct(state)
     tick(state)
-    if (finaleStartDay === null && state.finaleStarted) finaleStartDay = state.day
+
+    const a = state.auction
+    if (a && currentAuction === null) {
+      currentAuction = state.flags['first-auction'] ? 'ftue' : state.rung === 1 ? 'a2' : 'a3'
+      if (currentAuction === 'a2') auction2Fired = true
+      if (currentAuction === 'a3') auction3Fired = true
+    }
+    if (a && a.concluded && a.wonBreed !== null) {
+      if (currentAuction === 'a2') auction2Won = true
+      if (currentAuction === 'a3') auction3Won = true
+    }
+    if (!a) currentAuction = null
+
+    if (finaleStartDay === null && state.finaleStarted) {
+      finaleStartDay = state.day
+      dragonsAtFinaleStart = state.dragons.length
+      rungAtFinaleStart = state.rung
+    }
     if (standingAtDay100 === null && state.day >= 100) standingAtDay100 = state.standing
+    if (standingAtDay150 === null && state.day >= 150) standingAtDay150 = state.standing
   }
 
   const timedOut = state.status === 'running'
@@ -198,6 +237,13 @@ export function runOne(seed: number): RunResult {
     dragonsAtEnd: state.dragons.length,
     finaleStartDay,
     standingAtDay100: standingAtDay100 ?? state.standing,
+    standingAtDay150: standingAtDay150 ?? state.standing,
+    auction2Fired,
+    auction2Won,
+    auction3Fired,
+    auction3Won,
+    dragonsAtFinaleStart,
+    rungAtFinaleStart,
   }
 }
 
@@ -243,6 +289,12 @@ function main(): void {
   }
 
   const standings100 = results.map((r) => r.standingAtDay100)
+  const a2Fired = results.filter((r) => r.auction2Fired)
+  const a2Won = results.filter((r) => r.auction2Won)
+  const a3Fired = results.filter((r) => r.auction3Fired)
+  const a3Won = results.filter((r) => r.auction3Won)
+  const finaleDragons = reachedFinale.map((r) => r.dragonsAtFinaleStart!)
+  const finaleRungs = reachedFinale.map((r) => r.rungAtFinaleStart!)
 
   const rows: [string, string][] = [
     ['runs (N)', String(n)],
@@ -258,6 +310,11 @@ function main(): void {
     ['median score', median(results.map((r) => r.score)).toFixed(0)],
     ['median run length (days)', median(results.map((r) => r.runLengthDays)).toFixed(0)],
     ['standing @day100 p10/p90', `${percentile(standings100, 10).toFixed(0)} / ${percentile(standings100, 90).toFixed(0)}`],
+    ['median standing @day150', median(results.map((r) => r.standingAtDay150)).toFixed(0)],
+    ['auction-2 fired / won', `${pct(a2Fired.length, n)} / ${pct(a2Won.length, n)}`],
+    ['auction-3 fired / won', `${pct(a3Fired.length, n)} / ${pct(a3Won.length, n)}`],
+    ['median dragons @finale start', finaleDragons.length ? median(finaleDragons).toFixed(1) : 'n/a'],
+    ['median rung @finale start', finaleRungs.length ? median(finaleRungs).toFixed(1) : 'n/a'],
   ]
 
   const labelW = Math.max(...rows.map((r) => r[0].length))

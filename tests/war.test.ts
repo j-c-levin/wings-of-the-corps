@@ -14,6 +14,7 @@ import {
   WAR_RUMOR_MID_HEAT,
   WAR_RUMOR_HIGH_HEAT,
   FINALE_LENGTH_DAYS,
+  FINALE_MISSION_INTERVAL_DAYS,
   MAX_OPEN_OFFERS,
   KAZILIK_COST,
   SCORE_PER_DRAGON_WEIGHT,
@@ -263,19 +264,20 @@ describe('finale mission pressure', () => {
 
   it('defers an injection while a card is pending on its due day, then catches up once clear', () => {
     const state = newRun(8)
-    startFinale(state) // day 0; first mission due on day 3
+    startFinale(state) // day 0; first mission due on day FINALE_MISSION_INTERVAL_DAYS
     const rng = createRng(9)
+    const dueDay = FINALE_MISSION_INTERVAL_DAYS
 
-    for (let d = 1; d <= 4; d++) {
-      state.pendingCards = d === 3 ? [{ id: 'block', templateId: 'tribute-demand', params: {} }] : []
+    for (let d = 1; d <= dueDay + 1; d++) {
+      state.pendingCards = d === dueDay ? [{ id: 'block', templateId: 'tribute-demand', params: {} }] : []
       stepWarDay(state, rng)
-      if (d === 3) {
+      if (d === dueDay) {
         // Due today, but blocked by the pending card — deferred, not skipped.
         expect(state.missions.some((m) => m.kind === 'war')).toBe(false)
       }
     }
 
-    // Day 4: pendingCards clear again — the deferred mission catches up.
+    // The day after: pendingCards clear again — the deferred mission catches up.
     expect(state.missions.some((m) => m.kind === 'war')).toBe(true)
   })
 })
@@ -357,7 +359,7 @@ describe('endings and scoring', () => {
 
   it('"relieved" also carries a score', () => {
     const state = newRun(13)
-    state.rung = 2 // floor 12, so standing 0 is always below expectation
+    state.rung = 2 // positive rung-2 floor, so standing 0 is always below expectation
     state.standing = 0
     for (let i = 0; i < TICKS_PER_DAY * 30; i++) tick(state)
     expect(state.status).toBe('ended')

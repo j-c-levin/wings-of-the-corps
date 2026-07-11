@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { newRun } from '../src/sim/newRun'
 import { tick, addLog } from '../src/sim/tick'
-import { LOG_CAP, TICKS_PER_DAY, FAIL_DAYS_TO_RELIEVED, FEED_SHORTFALL_CONTENTMENT } from '../src/sim/balance'
+import { LOG_CAP, TICKS_PER_DAY, FAIL_DAYS_TO_RELIEVED, FEED_SHORTFALL_CONTENTMENT, EXPECTATION_FLOOR_BY_RUNG } from '../src/sim/balance'
 import type { Dragon, GameState } from '../src/sim/types'
 
 function makeDragon(state: GameState, overrides: Partial<Dragon> = {}): Dragon {
@@ -126,7 +126,7 @@ describe('tick', () => {
     state.rung = 3
     state.standing = 0
     tickN(state, TICKS_PER_DAY)
-    expect(state.expectation).toBe(30)
+    expect(state.expectation).toBe(EXPECTATION_FLOOR_BY_RUNG[3])
   })
 
   it('raises expectation with standing per the exact formula', () => {
@@ -139,7 +139,7 @@ describe('tick', () => {
 
   it('ends the run as relieved after FAIL_DAYS_TO_RELIEVED consecutive shortfall days', () => {
     const state = newRun(13)
-    state.rung = 2 // floor 12, so standing 0 is always below expectation
+    state.rung = 2 // positive rung-2 floor, so standing 0 is always below expectation
     state.standing = 0
     tickN(state, TICKS_PER_DAY * FAIL_DAYS_TO_RELIEVED)
     expect(state.status).toBe('ended')
